@@ -1,0 +1,24 @@
+{
+  "format_version": 1,
+  "project_id": "example-three-bay-house",
+  "name": "三开间江南厅堂",
+  "minecraft_version": "1.21.5",
+  "data_version": 4325,
+  "modules": [],
+  "settings": {
+    "building": {
+      "type": "simple_house",
+      "width": 9,
+      "length": 11,
+      "wall_height": 4,
+      "roof_overhang": 1,
+      "materials": {
+        "foundation": "minecraft:stone_bricks",
+        "floor": "minecraft:spruce_planks",
+        "wall": "minecraft:white_terracotta",
+        "roof": "minecraft:spruce_stairs",
+        "window": "minecraft:glass_pane"
+      }
+    }
+  }
+}
