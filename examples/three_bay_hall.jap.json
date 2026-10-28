@@ -1,0 +1,21 @@
+{
+  "format_version": 1,
+  "project_id": "example-three-bay-hall",
+  "name": "三开间江南厅堂",
+  "minecraft_version": "1.21.5",
+  "data_version": 4325,
+  "modules": [],
+  "settings": {
+    "building": {
+      "type": "hall",
+      "bay_count": 3,
+      "bay_width": 5,
+      "depth": 7,
+      "column_height": 4,
+      "plinth_height": 1,
+      "roof_rise": 3,
+      "eaves": 1,
+      "door_width": 2
+    }
+  }
+}

@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 import re
 
+from .generators.hall import HallParameters, generate_hall
 from .generators.simple_house import SimpleHouseConfig, generate_simple_house
 from .io.project_json import JiangnanProject, load_project, save_project
 from .io.schematic import write_schematic
@@ -26,7 +27,7 @@ def main() -> int:
     info_parser = subparsers.add_parser("info", help="show project metadata")
     info_parser.add_argument("project", type=Path, help="project JSON path")
 
-    generate_parser = subparsers.add_parser("generate", help="generate a simple house as Sponge v3 .schem")
+    generate_parser = subparsers.add_parser("generate", help="generate a building as Sponge v3 .schem")
     generate_parser.add_argument("--project", required=True, type=Path, help="project JSON path")
     generate_parser.add_argument("--output", type=Path, help="output Sponge schematic path")
 
@@ -51,11 +52,27 @@ def main() -> int:
             print(f"模块数: {len(project.modules)}")
         else:
             building = project.settings.get("building", {})
-            if building.get("type", "simple_house") != "simple_house":
-                raise ValueError(f"unsupported building type: {building.get('type')!r}")
-            allowed = {"width", "length", "wall_height", "roof_overhang", "materials"}
-            config = SimpleHouseConfig(**{key: value for key, value in building.items() if key in allowed})
-            model = generate_simple_house(config)
+            building_type = building.get("type", "simple_house")
+            if building_type == "simple_house":
+                allowed = {"width", "length", "wall_height", "roof_overhang", "materials"}
+                config = SimpleHouseConfig(**{key: value for key, value in building.items() if key in allowed})
+                model = generate_simple_house(config)
+            elif building_type == "hall":
+                allowed = {
+                    "bay_count",
+                    "bay_width",
+                    "depth",
+                    "column_height",
+                    "plinth_height",
+                    "roof_rise",
+                    "eaves",
+                    "door_width",
+                    "materials",
+                }
+                config = HallParameters(**{key: value for key, value in building.items() if key in allowed})
+                model = generate_hall(config)
+            else:
+                raise ValueError(f"unsupported building type: {building_type!r}")
             safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", project.name).strip("_") or "jiangnan_building"
             output = args.output or Path("workspace") / "exports" / f"{safe_name}.schem"
             destination = write_schematic(
