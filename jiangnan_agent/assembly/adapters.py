@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import fields
+from collections.abc import Mapping
+
 from ..core.block import BlockState
 from ..core.geometry import BoundingBox
 from ..core.scene import AIR
@@ -15,6 +18,14 @@ from ..generators.hall import (
 from .model import ClearanceZone, ConnectionAnchor, Module
 
 _OPPOSITE = {"north": "south", "east": "west", "south": "north", "west": "east"}
+
+
+def _parameters_dict(parameters) -> dict[str, object]:
+    values: dict[str, object] = {}
+    for item in fields(parameters):
+        value = getattr(parameters, item.name)
+        values[item.name] = dict(value) if isinstance(value, Mapping) else value
+    return values
 
 
 def _roof_clearance(module_id: str, model) -> tuple[ClearanceZone, ...]:
@@ -124,7 +135,16 @@ def hall_module(
             )
         )
 
-    return Module(module_id, "hall", model, tuple(anchors), _roof_clearance(module_id, model))
+    saved_parameters = _parameters_dict(parameters)
+    saved_parameters["through_passage"] = through_passage
+    return Module(
+        module_id,
+        "hall",
+        model,
+        tuple(anchors),
+        _roof_clearance(module_id, model),
+        parameters=saved_parameters,
+    )
 
 
 def corridor_module(
@@ -164,4 +184,13 @@ def corridor_module(
             "eaves",
         ),
     )
-    return Module(module_id, "corridor", model, anchors, clearances)
+    saved_parameters = _parameters_dict(parameters)
+    saved_parameters["passage_width"] = passage_width
+    return Module(
+        module_id,
+        "corridor",
+        model,
+        anchors,
+        clearances,
+        parameters=saved_parameters,
+    )

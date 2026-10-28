@@ -12,6 +12,10 @@ from .model import ClearanceZone, ConnectionAnchor, Module
 _FACINGS = ("north", "east", "south", "west")
 
 
+def _append_step(module: Module, step: dict[str, object]) -> tuple[dict[str, object], ...]:
+    return (*module.transform_steps, step)
+
+
 def _checked_offset(offset: Position) -> Position:
     if (
         not isinstance(offset, tuple)
@@ -78,7 +82,18 @@ def translate_module(module: Module, offset: Position) -> Module:
         ClearanceZone(zone.name, zone.bounds.translated(dx, dy, dz), zone.purpose)
         for zone in module.clearance_zones
     )
-    return Module(module.module_id, module.kind, module.model.translated(dx, dy, dz), anchors, clearances)
+    steps = module.transform_steps
+    if offset != (0, 0, 0):
+        steps = _append_step(module, {"op": "translate", "offset": (dx, dy, dz)})
+    return Module(
+        module.module_id,
+        module.kind,
+        module.model.translated(dx, dy, dz),
+        anchors,
+        clearances,
+        module.parameters,
+        steps,
+    )
 
 
 def rotate_module(module: Module, quarter_turns: int) -> Module:
@@ -103,7 +118,18 @@ def rotate_module(module: Module, quarter_turns: int) -> Module:
         ClearanceZone(zone.name, _map_box(zone.bounds, lambda point: _rotate_point(point, bounds, turns)), zone.purpose)
         for zone in module.clearance_zones
     )
-    return Module(module.module_id, module.kind, rotate_model_y(module.model, turns), anchors, clearances)
+    steps = module.transform_steps
+    if turns:
+        steps = _append_step(module, {"op": "rotate_y", "quarter_turns": turns})
+    return Module(
+        module.module_id,
+        module.kind,
+        rotate_model_y(module.model, turns),
+        anchors,
+        clearances,
+        module.parameters,
+        steps,
+    )
 
 
 def mirror_module(module: Module, axis: str) -> Module:
@@ -146,4 +172,13 @@ def mirror_module(module: Module, axis: str) -> Module:
         ClearanceZone(zone.name, _map_box(zone.bounds, mirror_point), zone.purpose)
         for zone in module.clearance_zones
     )
-    return Module(module.module_id, module.kind, mirrored_model, anchors, clearances)
+    steps = _append_step(module, {"op": "mirror", "axis": axis})
+    return Module(
+        module.module_id,
+        module.kind,
+        mirrored_model,
+        anchors,
+        clearances,
+        module.parameters,
+        steps,
+    )

@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import math
 from types import MappingProxyType
 
 from ..core.geometry import BoundingBox, Position
 from ..core.scene import VoxelModel
 
 _CARDINAL_FACINGS = frozenset({"north", "east", "south", "west"})
+
+type JSONValue = None | bool | int | float | str | tuple[JSONValue, ...] | Mapping[str, JSONValue]
 
 
 def _nonempty_string(value: str, name: str) -> str:
@@ -32,6 +35,22 @@ def _positive_integer(value: int, name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise ValueError(f"{name} must be a positive integer")
     return value
+
+
+def _freeze_json(value: object, name: str) -> JSONValue:
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"{name} values must be finite JSON numbers")
+        return value
+    if isinstance(value, Mapping):
+        if any(not isinstance(key, str) for key in value):
+            raise ValueError(f"{name} object keys must be strings")
+        return MappingProxyType({key: _freeze_json(item, name) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_json(item, name) for item in value)
+    raise ValueError(f"{name} must contain only JSON-compatible values")
 
 
 @dataclass(frozen=True)
@@ -79,6 +98,8 @@ class Module:
     model: VoxelModel
     anchors: tuple[ConnectionAnchor, ...] = ()
     clearance_zones: tuple[ClearanceZone, ...] = ()
+    parameters: Mapping[str, JSONValue] = field(default_factory=dict)
+    transform_steps: tuple[Mapping[str, JSONValue], ...] = ()
 
     def __post_init__(self) -> None:
         _nonempty_string(self.module_id, "module ID")
@@ -98,12 +119,27 @@ class Module:
         if len(zone_names) != len(set(zone_names)):
             raise ValueError("module clearance zone names must be unique")
 
+        if not isinstance(self.parameters, Mapping):
+            raise ValueError("module parameters must be a JSON object")
+        frozen_parameters = _freeze_json(self.parameters, "module parameters")
+        if not isinstance(frozen_parameters, Mapping):
+            raise ValueError("module parameters must be a JSON object")
+        transform_steps = tuple(self.transform_steps)
+        frozen_steps: list[Mapping[str, JSONValue]] = []
+        for step in transform_steps:
+            frozen_step = _freeze_json(step, "module transform steps")
+            if not isinstance(frozen_step, Mapping):
+                raise ValueError("each module transform step must be a JSON object")
+            frozen_steps.append(frozen_step)
+
         model_copy = VoxelModel()
         for position, state in self.model.blocks.items():
             model_copy.set_block(position, state)
         object.__setattr__(self, "model", model_copy)
         object.__setattr__(self, "anchors", anchors)
         object.__setattr__(self, "clearance_zones", clearance_zones)
+        object.__setattr__(self, "parameters", frozen_parameters)
+        object.__setattr__(self, "transform_steps", tuple(frozen_steps))
 
     def anchor(self, name: str) -> ConnectionAnchor:
         """Return a named anchor or raise a clear lookup error."""

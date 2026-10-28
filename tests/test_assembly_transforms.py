@@ -21,6 +21,7 @@ def make_module() -> Module:
             ConnectionAnchor("south", (1, 0, 3), "south", "passage", 2, 3),
         ),
         clearance_zones=(ClearanceZone("roof-eaves", BoundingBox(0, 1, 0, 2, 2, 1), "eaves"),),
+        parameters={"bay_count": 3},
     )
 
 
@@ -64,3 +65,17 @@ def test_mirror_updates_facing_handedness_anchors_and_clearances() -> None:
 def test_mirror_rejects_non_horizontal_axes() -> None:
     with pytest.raises(ValueError, match="axis"):
         mirror_module(make_module(), "y")
+
+
+def test_transforms_preserve_parameters_and_record_ordered_recipes() -> None:
+    source = make_module()
+
+    transformed = mirror_module(rotate_module(translate_module(source, (4, 1, -2)), 1), "z")
+
+    assert transformed.parameters == source.parameters
+    assert transformed.transform_steps == (
+        {"op": "translate", "offset": (4, 1, -2)},
+        {"op": "rotate_y", "quarter_turns": 1},
+        {"op": "mirror", "axis": "z"},
+    )
+    assert source.transform_steps == ()

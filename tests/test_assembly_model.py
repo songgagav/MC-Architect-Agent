@@ -67,3 +67,34 @@ def test_connection_records_named_endpoints() -> None:
 
     assert (connection.first_module_id, connection.first_anchor) == ("hall-1", "front")
     assert (connection.second_module_id, connection.second_anchor) == ("corridor-1", "north")
+
+
+def test_module_copies_and_freezes_nested_json_parameters() -> None:
+    parameters = {"bay_count": 3, "materials": {"roof": "minecraft:stone"}, "labels": ["front"]}
+    module = Module("hall-1", "hall", VoxelModel(), parameters=parameters)
+
+    parameters["materials"]["roof"] = "minecraft:dirt"
+    parameters["labels"].append("changed")
+
+    assert module.parameters["materials"]["roof"] == "minecraft:stone"
+    assert module.parameters["labels"] == ("front",)
+    with pytest.raises(TypeError):
+        module.parameters["materials"]["roof"] = "minecraft:dirt"
+    with pytest.raises(ValueError, match="JSON-compatible"):
+        Module("invalid", "room", VoxelModel(), parameters={"custom": object()})
+
+
+def test_building_adapters_capture_generator_parameters() -> None:
+    from jiangnan_agent.assembly.adapters import corridor_module, hall_module
+    from jiangnan_agent.generators.hall import CorridorParameters, HallParameters
+
+    hall_parameters = HallParameters(bay_count=5, bay_width=6, depth=9, materials={"roof": "minecraft:stone_stairs"})
+    corridor_parameters = CorridorParameters(length=13, width=5, materials={"roof": "minecraft:stone_stairs"})
+    hall = hall_module("hall-1", hall_parameters, through_passage=True)
+    corridor = corridor_module("corridor-1", corridor_parameters, passage_width=2)
+
+    assert hall.parameters["bay_count"] == 5
+    assert hall.parameters["materials"]["roof"] == "minecraft:stone_stairs"
+    assert hall.parameters["through_passage"] is True
+    assert corridor.parameters["length"] == 13
+    assert corridor.parameters["passage_width"] == 2
