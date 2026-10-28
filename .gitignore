@@ -10,3 +10,5 @@ workspace/exports/
 archive/litematic_prototype/
 Mine2Blend/
 Mine2Blend.zip
+# Local reference schematics; keep source templates out of project commits.
+Template/
