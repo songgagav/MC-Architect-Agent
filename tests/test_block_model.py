@@ -48,3 +48,16 @@ def test_block_is_a_coordinate_and_state_pair() -> None:
 def test_invalid_block_state_is_rejected() -> None:
     with pytest.raises(ValueError):
         BlockState.parse("minecraft:oak_stairs[facing]")
+
+
+def test_mirror_block_state_reflects_direction_handedness_and_rotation() -> None:
+    stairs = BlockState.parse("minecraft:oak_stairs[facing=east,shape=inner_left,half=bottom]")
+    door = BlockState.parse("minecraft:oak_door[facing=north,hinge=left,half=lower]")
+    rail = BlockState.parse("minecraft:rail[east=true,north=true,south=false,west=false,shape=north_east]")
+    head = BlockState.parse("minecraft:player_head[rotation=12]")
+
+    assert stairs.mirror("x").to_string() == "minecraft:oak_stairs[facing=west,half=bottom,shape=inner_right]"
+    assert door.mirror("z").to_string() == "minecraft:oak_door[facing=south,half=lower,hinge=right]"
+    assert rail.mirror("x").to_string() == "minecraft:rail[east=false,north=true,shape=north_west,south=false,west=true]"
+    assert head.mirror("x").to_string() == "minecraft:player_head[rotation=4]"
+    assert head.mirror("z").to_string() == "minecraft:player_head[rotation=12]"

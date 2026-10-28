@@ -80,6 +80,41 @@ class BlockState:
                 props["rotation"] = str((rotation + turns * 4) % 16)
         return BlockState(self.block_id, tuple(props.items()))
 
+    def mirror(self, axis: str) -> BlockState:
+        """Reflect horizontal direction and handedness properties across X or Z."""
+
+        if axis not in ("x", "z"):
+            raise ValueError("mirror axis must be 'x' or 'z'")
+        direction_map = (
+            {"east": "west", "west": "east"}
+            if axis == "x"
+            else {"north": "south", "south": "north"}
+        )
+        props: dict[str, str] = {}
+        for key, value in self.properties:
+            mirrored_key = direction_map.get(key, key)
+            if key == "facing":
+                value = direction_map.get(value, value)
+            elif key == "rotation":
+                try:
+                    rotation = int(value)
+                except ValueError:
+                    pass
+                else:
+                    if 0 <= rotation <= 15:
+                        value = str((-rotation if axis == "x" else 8 - rotation) % 16)
+            elif key in ("hinge", "shape"):
+                value = value.replace("left", "__mirror_tmp__").replace("right", "left").replace(
+                    "__mirror_tmp__", "right"
+                )
+                value = re.sub(
+                    r"(north|east|south|west)",
+                    lambda match: direction_map.get(match.group(0), match.group(0)),
+                    value,
+                )
+            props[mirrored_key] = value
+        return BlockState(self.block_id, tuple(props.items()))
+
 
 @dataclass(frozen=True)
 class Block:

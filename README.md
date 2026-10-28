@@ -1,6 +1,6 @@
 # Jiangnan Architect Agent
 
-本地运行的江南建筑生成项目，目标 Minecraft Java 1.21.5（DataVersion 4325）。当前包含工程 JSON、稀疏方块模型、Sponge Schematic v3 `.schem` 读写，以及参数化简单房屋、厅堂与直廊生成器。
+本地运行的江南建筑生成项目，目标 Minecraft Java 1.21.5（DataVersion 4325）。当前包含工程 JSON、稀疏方块模型、Sponge Schematic v3 `.schem` 读写、参数化建筑生成器和可验证的模块组合内核。
 
 ## 环境安装
 
@@ -47,6 +47,14 @@ jiangnan generate --project examples\three_bay_hall.jap.json
 
 `hall` 工程可调 `bay_count`（奇数开间）、`bay_width`、`depth`、`column_height`、`plinth_height`、`roof_rise`、`eaves`、`door_width` 和 `materials`。生成器会按参数同步调整柱网、梁、墙、门窗、台基、檐口和屋顶。
 
+## 模块组合示例
+
+```powershell
+python -m examples.two_courtyard
+```
+
+示例将三座厅堂、两段直廊和四面院墙保留为独立模块，通过门洞与边界锚点连接，校验后输出 `workspace\exports\two_courtyard.schem`。也可以在 Python 中调用 `build_two_courtyard()`，再用 `replace_corridor_roof()` 单独替换一段廊子的屋顶材料。此示例验证的是几何连接规则，不代表经过文献考证的营造方案。
+
 ## 开发与检查
 
 ```powershell
@@ -58,6 +66,7 @@ GitHub Actions 在 Windows 和 Ubuntu、Python 3.12 上运行同一套 pytest。
 ## 目录
 
 - `jiangnan_agent/core/`：方块、坐标、边界、稀疏方块模型和变换。
+- `jiangnan_agent/assembly/`：模块锚点、平移/旋转/镜像、连接图、拆分/替换、冲突校验和组合渲染。
 - `jiangnan_agent/io/`：工程 JSON 与 Sponge v3 读写。
 - `jiangnan_agent/generators/`：基础构件、参数化厅堂/直廊与简单房屋生成器。
 - `tests/`：方块模型、工程 JSON、命令行、Sponge 文件和简单房屋测试。
