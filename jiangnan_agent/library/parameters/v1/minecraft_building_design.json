@@ -1,0 +1,49 @@
+{
+  "schema_id": "minecraft_building_design",
+  "version": 1,
+  "asset_id": "design.shared",
+  "kind": "minecraft_building_design",
+  "grid_scale_meters_per_block": 1.0,
+  "source_categories": [
+    "user_input",
+    "user_preference",
+    "derived",
+    "literature_reference",
+    "survey_data",
+    "reference_statistics",
+    "minecraft_adaptation"
+  ],
+  "parameters": {
+    "building_type": {"type": "string", "status": "implemented", "default": null, "source_category": "user_input"},
+    "style_profile_id": {"type": "string", "status": "implemented", "default": null, "source_category": "user_preference"},
+    "width_blocks": {"type": "integer", "status": "partially_supported", "default": null, "source_category": "user_input", "derived_category": "derived", "module_bindings": {"hall": "derived from bay_count and bay_spacing plus eaves", "corridor": "width"}},
+    "depth_blocks": {"type": "integer", "status": "partially_supported", "default": null, "source_category": "user_input", "module_bindings": {"hall": "depth", "corridor": "length along module axis"}},
+    "height_blocks": {"type": "integer", "status": "partially_supported", "default": null, "source_category": "user_input", "derived_category": "derived", "note": "No single total-height field is currently exposed by both generators."},
+    "bay_count": {"type": "integer", "status": "implemented_for_hall", "default": null, "source_category": "user_input"},
+    "column_grid": {"type": "object", "status": "implemented", "default": null, "source_category": "user_input", "module_bindings": {"hall": "bay_spacing", "corridor": "column_spacing"}},
+    "column_height": {"type": "integer", "status": "implemented", "default": null, "source_category": "user_input"},
+    "roof_type": {"type": "string", "status": "implemented_with_generator_limits", "default": null, "source_category": "user_input", "note": "Current generators support their declared roof types and symmetric gable section only."},
+    "roof_slope": {"type": "object", "status": "partially_supported", "default": null, "source_category": "user_input", "derived_category": "derived", "module_bindings": {"hall": "discrete roof_section.rise", "corridor": "discrete roof_section.rise"}},
+    "ridge_contour": {"type": "object", "status": "planned", "default": null, "source_category": "minecraft_adaptation"},
+    "eaves_projection": {"type": "integer", "status": "implemented", "default": null, "source_category": "user_input", "module_bindings": {"hall": "eaves", "corridor": "eaves"}},
+    "corner_upturn": {"type": "object", "status": "planned", "default": null, "source_category": "minecraft_adaptation"},
+    "roof_layers": {"type": "array", "status": "planned_visual_reference", "default": null, "source_category": "user_preference", "note": "No semantic roof layers are inferred from template statistics."},
+    "materials": {"type": "object", "status": "implemented", "default": null, "source_category": "user_input", "note": "Material frequency from references is a candidate list, not a semantic assignment."},
+    "door_window_proportions": {"type": "object", "status": "partially_supported", "default": null, "source_category": "user_input", "derived_category": "derived", "module_bindings": {"hall": "door_width; window proportions are not an exposed parameter", "corridor": "no door/window generator parameters"}},
+    "ornament_density": {"type": "number", "status": "style_only", "default": null, "source_category": "user_preference", "note": "Designer-controlled; does not currently change generated blocks."},
+    "reference_asset_ids": {"type": "array", "status": "implemented_for_profiles", "default": [], "source_category": "reference_statistics", "note": "Reference assets guide visual choices only unless a future generator binding is explicitly added."},
+    "module_connection_constraints": {"type": "array", "status": "implemented_for_assembly", "default": [], "source_category": "minecraft_adaptation", "note": "Uses existing anchors, occupied bounds, clearances, and Assembly validation."}
+  },
+  "hard_constraints": [
+    {"id": "integer-block-coordinates", "source": "Minecraft block grid", "enforcement": "generator and geometry validators"},
+    {"id": "valid-block-state-properties", "source": "Minecraft 1.21.5 target", "enforcement": "BlockState validator"},
+    {"id": "schematic-format-integrity", "source": "Sponge Schematic v3 writer/reader", "enforcement": "export and read-back tests"},
+    {"id": "assembly-connection-validity", "source": "module anchors and clearances", "enforcement": "Assembly validation"}
+  ],
+  "soft_constraints": [
+    {"id": "style-profile-guidance", "source_category": "user_preference", "override_allowed": true},
+    {"id": "reference-palette-candidates", "source_category": "reference_statistics", "override_allowed": true},
+    {"id": "visual-proportion-adjustment", "source_category": "minecraft_adaptation", "override_allowed": true}
+  ],
+  "historical_claim_policy": "A literature reference is context only unless its exact source, locator, regional scope, and verification status are recorded. No undocumented measurement is emitted as a historical standard."
+}

@@ -22,7 +22,15 @@ jiangnan-mcp = "jiangnan_agent.agent_tools.mcp_server:main"
 include = ["jiangnan_agent*"]
 
 [tool.setuptools.package-data]
-jiangnan_agent = ["knowledge/v*/*.json", "parameters/v*/*.json", "assets/v*/*.json"]
+jiangnan_agent = [
+    "knowledge/v*/*.json",
+    "parameters/v*/*.json",
+    "assets/v*/*.json",
+    "library/catalog/v*/*.json",
+    "library/styles/v*/*.json",
+    "library/parameters/v*/*.json",
+    "library/migrations/*.sql",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
