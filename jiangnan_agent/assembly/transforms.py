@@ -93,6 +93,7 @@ def translate_module(module: Module, offset: Position) -> Module:
         clearances,
         module.parameters,
         steps,
+        module.metadata,
     )
 
 
@@ -129,6 +130,7 @@ def rotate_module(module: Module, quarter_turns: int) -> Module:
         clearances,
         module.parameters,
         steps,
+        module.metadata,
     )
 
 
@@ -181,4 +183,5 @@ def mirror_module(module: Module, axis: str) -> Module:
         clearances,
         module.parameters,
         steps,
+        module.metadata,
     )

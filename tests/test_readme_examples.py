@@ -26,6 +26,10 @@ def test_readme_module_editing_example_runs_from_a_clean_workspace(tmp_path, mon
     project_path = Path(namespace["project_path"])
     loaded = load_project(project_path)
     assert loaded.assembly.modules["hall-main"].parameters["bay_count"] == 5
+    assert loaded.assembly.modules["hall-main"].metadata["asset_id"] == "jiangnan.hall"
+    assert loaded.assembly.modules["hall-main"].metadata["asset_version"] == 2
+    assert loaded.assembly.modules["hall-main"].metadata["knowledge_base_version"] == 2
+    assert loaded.assembly.modules["hall-main"].metadata["parameter_config"]["bay_count"] == 5
     assert loaded.revision_cursor == 1
 
 
@@ -38,6 +42,7 @@ def test_codex_mcp_documentation_matches_the_tool_contract() -> None:
         r'-m jiangnan_agent.agent_tools.mcp_server --workspace-root "E:\MCbuild"'
     )
     expected_tools = {
+        "list_knowledge_rules",
         "list_projects",
         "get_project",
         "list_modules",

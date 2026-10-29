@@ -29,6 +29,7 @@ def test_mcp_stdio_lists_strict_tools_and_creates_a_project_module(tmp_path: Pat
                     listed = await session.list_tools()
                     tools = {tool.name: tool for tool in listed.tools}
                     expected_names = {
+                        "list_knowledge_rules",
                         "list_projects",
                         "get_project",
                         "list_modules",
@@ -46,6 +47,15 @@ def test_mcp_stdio_lists_strict_tools_and_creates_a_project_module(tmp_path: Pat
                     assert set(tools) == expected_names
                     assert all(tool.inputSchema["additionalProperties"] is False for tool in tools.values())
 
+                    knowledge_schema = tools["list_knowledge_rules"].inputSchema
+                    assert knowledge_schema["type"] == "object"
+                    assert set(knowledge_schema["properties"]) == {
+                        "region",
+                        "building_type",
+                        "evidence_kind",
+                        "knowledge_version",
+                    }
+
                     schema = tools["create_module"].inputSchema
                     assert schema["type"] == "object"
                     assert schema["additionalProperties"] is False
@@ -54,6 +64,19 @@ def test_mcp_stdio_lists_strict_tools_and_creates_a_project_module(tmp_path: Pat
 
                     projects = await session.call_tool("list_projects", {})
                     assert projects.isError is False
+                    knowledge = await session.call_tool(
+                        "list_knowledge_rules",
+                        {
+                            "region": "cn.anhui.south.huizhou",
+                            "building_type": "residential_building",
+                            "evidence_kind": "literature_fact",
+                        },
+                    )
+                    assert knowledge.isError is False
+                    knowledge_text = "\n".join(item.text for item in knowledge.content if hasattr(item, "text"))
+                    assert "hui-materials-and-gable-decoration" in knowledge_text
+                    assert "https://www.huangshan.gov.cn/zjhs/rwhz/hpjz/8294057.html" in knowledge_text
+                    assert not (tmp_path / "workspace").exists()
                     extra_argument = await session.call_tool(
                         "create_project",
                         {"name": "Ignored data", "project_path": "ignored.json", "unexpected": True},

@@ -1,1 +1,1 @@
-"""Runnable example assemblies for Jiangnan Architect Agent."""
+"""Runnable examples and deterministic fixtures for local projects."""

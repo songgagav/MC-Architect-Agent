@@ -41,6 +41,43 @@ def test_project_and_module_discovery_create_a_three_bay_hall(tmp_path: Path) ->
     json.dumps([project, created, module, service.list_modules("residence.jap.json")])
 
 
+def test_knowledge_query_returns_exact_region_rule_with_citation_without_workspace_writes(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+
+    result = service.list_knowledge_rules(
+        region="cn.anhui.south.huizhou",
+        building_type="residential_building",
+        evidence_kind="literature_fact",
+    )
+
+    assert result["knowledge_base_version"] == 2
+    assert result["filters"] == {
+        "region": "cn.anhui.south.huizhou",
+        "building_type": "residential_building",
+        "evidence_kind": "literature_fact",
+        "knowledge_version": None,
+    }
+    assert [rule["rule_id"] for rule in result["rules"]] == ["hui-materials-and-gable-decoration"]
+    rule = result["rules"][0]
+    assert rule["confidence"] == "medium"
+    assert rule["source"]["locator"] == "https://www.huangshan.gov.cn/zjhs/rwhz/hpjz/8294057.html"
+    site_rules = service.list_knowledge_rules(region="cn.anhui.south.huangshan.yixian.xidi-hongcun")
+    assert {rule["source_id"] for rule in site_rules["rules"]} == {"unesco.xidi-hongcun.ouval"}
+    assert not (tmp_path / "workspace").exists()
+
+
+def test_knowledge_query_can_load_v1_and_rejects_unknown_evidence_kinds(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+
+    legacy = service.list_knowledge_rules(knowledge_version=1)
+
+    assert legacy["knowledge_base_version"] == 1
+    assert len(legacy["rules"]) == 4
+    assert all(rule["evidence_kind"] != "literature_fact" for rule in legacy["rules"])
+    with pytest.raises(ValueError, match="unsupported evidence_kind"):
+        service.list_knowledge_rules(evidence_kind="historical_standard")
+
+
 def test_parameter_edits_are_saved_by_stable_id_and_revision_summaries_are_bounded(tmp_path: Path) -> None:
     service = make_service(tmp_path)
     service.create_project("Residence", "residence.json")

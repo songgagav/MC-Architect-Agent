@@ -1,0 +1,182 @@
+{
+  "version": 2,
+  "sources": [
+    {
+      "source_id": "generator.hall.v1",
+      "source_type": "project_code",
+      "title": "Current hall generator behavior",
+      "locator": "jiangnan_agent/generators/hall.py:generate_hall"
+    },
+    {
+      "source_id": "generator.corridor.v1",
+      "source_type": "project_code",
+      "title": "Current corridor generator behavior",
+      "locator": "jiangnan_agent/generators/hall.py:generate_corridor"
+    },
+    {
+      "source_id": "user.modular-buildings.v1",
+      "source_type": "user_requirement",
+      "title": "User requirement for independent modular buildings",
+      "locator": "conversation: user requested individual buildings with freely combinable modules"
+    },
+    {
+      "source_id": "unesco.xidi-hongcun.ouval",
+      "source_type": "unesco_world_heritage_listing",
+      "title": "Ancient Villages in Southern Anhui – Xidi and Hongcun",
+      "locator": "https://whc.unesco.org/en/list/1002/"
+    },
+    {
+      "source_id": "huangshan.gazette.hui-residence-elements.2021",
+      "source_type": "municipal_gazetteer_summary",
+      "title": "徽州宅居要素（黄山市人民政府/市志办）",
+      "locator": "https://www.huangshan.gov.cn/zjhs/rwhz/hpjz/8294057.html"
+    },
+    {
+      "source_id": "huangshan.gazette.hui-residence.2019",
+      "source_type": "municipal_gazetteer_summary",
+      "title": "徽州宅居（黄山市人民政府/市志办）",
+      "locator": "https://www.huangshan.gov.cn/zjhs/rwhz/fsmq/8294878.html"
+    },
+    {
+      "source_id": "user.scope.jiangnan-huizhou",
+      "source_type": "user_requirement",
+      "title": "User-selected regional style scope",
+      "locator": "conversation: user selected Jiangnan Huizhou architecture in the middle/lower Yangtze region as the current focus"
+    },
+    {
+      "source_id": "user.template.fangtang.2026",
+      "source_type": "user_supplied_litematic",
+      "title": "芳堂-茯茯角.litematic",
+      "locator": "Template/芳堂-茯茯角.litematic; sha256=0bb61a4466780f3afa625c654481e344a1271c063ac3adc3c7d8139f3e2d3d9a"
+    },
+    {
+      "source_id": "user.template.liusufang.2026",
+      "source_type": "user_supplied_litematic",
+      "title": "流苏坊框架-茯茯角.litematic",
+      "locator": "Template/流苏坊框架-茯茯角.litematic; sha256=a26bc4b06639bf33236f5fa2905fb830f26caecb671387c785bcd0259ecbda7e"
+    }
+  ],
+  "rules": [
+    {
+      "rule_id": "hall-footprint-width",
+      "source_id": "generator.hall.v1",
+      "applicable_regions": ["unspecified"],
+      "building_types": ["hall"],
+      "evidence_kind": "minecraft_adaptation",
+      "basis": "generate_hall computes width as bay_count * bay_width + 1 blocks.",
+      "confidence": "high",
+      "scope": "Current voxel generator behavior only; it is not a historical dimension or regional standard.",
+      "statement": "The generated hall footprint width follows the current bay-grid formula."
+    },
+    {
+      "rule_id": "hall-front-window-width",
+      "source_id": "generator.hall.v1",
+      "applicable_regions": ["unspecified"],
+      "building_types": ["hall"],
+      "evidence_kind": "minecraft_adaptation",
+      "basis": "The current generator uses min(2, bay_width - 3) for a front window width.",
+      "confidence": "high",
+      "scope": "This warning describes the current Minecraft block output; it is not an architectural recommendation.",
+      "statement": "A bay spacing below five blocks narrows the default front window."
+    },
+    {
+      "rule_id": "corridor-post-grid",
+      "source_id": "generator.corridor.v1",
+      "applicable_regions": ["unspecified"],
+      "building_types": ["corridor"],
+      "evidence_kind": "minecraft_adaptation",
+      "basis": "The generator places posts at range(0, length, column_spacing) and also at length - 1.",
+      "confidence": "high",
+      "scope": "Current straight-corridor generator behavior only.",
+      "statement": "The corridor post grid always includes the final end position."
+    },
+    {
+      "rule_id": "user-independent-modules",
+      "source_id": "user.modular-buildings.v1",
+      "applicable_regions": ["not_applicable"],
+      "building_types": ["any"],
+      "evidence_kind": "user_preference",
+      "basis": "The user requested individual buildings with modular parts that can be freely combined.",
+      "confidence": "high",
+      "scope": "Product design preference; it does not assert a historical construction fact.",
+      "statement": "Buildings should remain individually addressable and freely combinable as modules."
+    },
+    {
+      "rule_id": "hui-location-xidi-hongcun",
+      "source_id": "unesco.xidi-hongcun.ouval",
+      "applicable_regions": ["cn.anhui.south.huangshan.yixian.xidi-hongcun"],
+      "building_types": ["traditional_village"],
+      "evidence_kind": "literature_fact",
+      "basis": "The UNESCO listing locates Xidi and Hongcun in Yi County, Huangshan City, southern Anhui, and describes the villages and their architecture across the 14th–20th centuries.",
+      "confidence": "high",
+      "scope": "Applies to the listed heritage villages and the period stated by the listing; not a universal rule for all Jiangnan or Hui buildings.",
+      "statement": "Xidi and Hongcun are documented southern Anhui villages whose layout, landscape setting, architecture, and decorative features retain characteristics developed from the 14th through 20th centuries."
+    },
+    {
+      "rule_id": "hui-village-house-water-system",
+      "source_id": "unesco.xidi-hongcun.ouval",
+      "applicable_regions": ["cn.anhui.south.huangshan.yixian.xidi-hongcun"],
+      "building_types": ["traditional_village"],
+      "evidence_kind": "literature_fact",
+      "basis": "The UNESCO listing describes village lanes, buildings, waterways, settlement layout, and house-water integration as parts of the listed cultural landscape.",
+      "confidence": "high",
+      "scope": "Site-level description of Xidi and Hongcun; it does not prescribe a house plan or a Minecraft water feature.",
+      "statement": "For Xidi and Hongcun, village layout, buildings, lanes, and water systems are documented as related parts of the settlement landscape."
+    },
+    {
+      "rule_id": "hui-materials-and-gable-decoration",
+      "source_id": "huangshan.gazette.hui-residence-elements.2021",
+      "applicable_regions": ["cn.anhui.south.huizhou"],
+      "building_types": ["residential_building", "residential_compound"],
+      "evidence_kind": "literature_fact",
+      "basis": "The Huangshan Municipal Gazetteer Office summary describes gray/dark roof tiles, white walls, horse-head/fire walls, and brick, wood, and stone carving in old Hui residences.",
+      "confidence": "medium",
+      "scope": "A qualitative summary of old Hui urban and rural residences; it is not a universal material schedule, fixed palette, or dimensional standard.",
+      "statement": "The cited local summary associates old Hui residences with gray or dark tiled roofs, white walls, horse-head/fire walls, and carved brick, wood, and stone details."
+    },
+    {
+      "rule_id": "hui-courtyard-and-sequential-compound",
+      "source_id": "huangshan.gazette.hui-residence-elements.2021",
+      "applicable_regions": ["cn.anhui.south.huizhou"],
+      "building_types": ["residential_house", "residential_compound"],
+      "evidence_kind": "literature_fact",
+      "basis": "The Huangshan Municipal Gazetteer Office summary distinguishes described three-room house and quadrangle skylight arrangements and notes multi-entry compounds with repeated courtyards.",
+      "confidence": "medium",
+      "scope": "Only the house forms described by the cited summary; not every Hui house, period, or social type, and no inferred dimensions.",
+      "statement": "The cited summary describes more than one courtyard/skylight arrangement and multi-entry compounds with repeated courtyards."
+    },
+    {
+      "rule_id": "user-selected-style-scope",
+      "source_id": "user.scope.jiangnan-huizhou",
+      "applicable_regions": ["user.selected.lower_yangtze.jiangnan_huizhou"],
+      "building_types": ["any"],
+      "evidence_kind": "user_preference",
+      "basis": "The user selected this regional/style scope for the current knowledge expansion.",
+      "confidence": "high",
+      "scope": "Records project scope only; it is not evidence that one uniform Hui style covers the entire middle/lower Yangtze region.",
+      "statement": "The current knowledge work focuses on Jiangnan Huizhou architecture within the user's selected middle/lower Yangtze scope."
+    },
+    {
+      "rule_id": "template-fangtang-reference",
+      "source_id": "user.template.fangtang.2026",
+      "applicable_regions": ["not_applicable"],
+      "building_types": ["user_reference"],
+      "evidence_kind": "user_preference",
+      "basis": "The user asked that the local projection file be considered as a design reference.",
+      "confidence": "high",
+      "scope": "Visual reference for voxel scale, massing, roof layering, and material choices only; it is not a historical source or proof of regional authenticity.",
+      "statement": "The Fangtang projection may inform user-preferred visual references, without being treated as historical evidence."
+    },
+    {
+      "rule_id": "template-liusuifang-reference",
+      "source_id": "user.template.liusufang.2026",
+      "applicable_regions": ["not_applicable"],
+      "building_types": ["user_reference"],
+      "evidence_kind": "user_preference",
+      "basis": "The user asked that the local projection file be considered as a design reference.",
+      "confidence": "high",
+      "scope": "Visual reference for voxel scale, massing, roof layering, and material choices only; it is not a historical source or proof of regional authenticity.",
+      "statement": "The Liusufang framework projection may inform user-preferred visual references, without being treated as historical evidence."
+    }
+  ]
+}

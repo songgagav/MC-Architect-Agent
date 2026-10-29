@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "assets": [
+    {
+      "asset_id": "jiangnan.hall",
+      "version": 1,
+      "kind": "hall",
+      "parameter_schema_id": "hall",
+      "parameter_schema_version": 1,
+      "knowledge_base_version": 1,
+      "source_id": "generator.hall.v1",
+      "anchor_interfaces": ["front", "rear", "court_west_front", "court_west_rear", "court_east_front", "court_east_rear"]
+    },
+    {
+      "asset_id": "jiangnan.corridor",
+      "version": 1,
+      "kind": "corridor",
+      "parameter_schema_id": "corridor",
+      "parameter_schema_version": 1,
+      "knowledge_base_version": 1,
+      "source_id": "generator.corridor.v1",
+      "anchor_interfaces": ["start", "end"]
+    },
+    {
+      "asset_id": "jiangnan.hall",
+      "version": 2,
+      "kind": "hall",
+      "parameter_schema_id": "hall",
+      "parameter_schema_version": 1,
+      "knowledge_base_version": 2,
+      "source_id": "generator.hall.v1",
+      "anchor_interfaces": ["front", "rear", "court_west_front", "court_west_rear", "court_east_front", "court_east_rear"]
+    },
+    {
+      "asset_id": "jiangnan.corridor",
+      "version": 2,
+      "kind": "corridor",
+      "parameter_schema_id": "corridor",
+      "parameter_schema_version": 1,
+      "knowledge_base_version": 2,
+      "source_id": "generator.corridor.v1",
+      "anchor_interfaces": ["start", "end"]
+    }
+  ]
+}

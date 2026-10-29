@@ -9,16 +9,16 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
-from ..assembly.adapters import corridor_module, hall_module
 from ..assembly.model import Assembly, Module
 from ..assembly.transforms import mirror_module, rotate_module, translate_module
 from ..assembly.validation import ValidationIssue, validate_assembly
+from ..assets import get_asset_for_kind, module_from_asset
 from ..core.geometry import Position
-from ..generators.hall import CorridorParameters, HallParameters
 from ..io.project_editor import ProjectEditor
 from ..io.project_generation import generate_project_model
 from ..io.project_history import BlockChange, ProjectRevision
 from ..io.project_json import JiangnanProject, load_project, save_project
+from ..knowledge import EvidenceKind, load_knowledge_base
 from ..io.schematic import read_schematic, write_schematic
 from .project_access import ProjectAccess
 
@@ -47,6 +47,61 @@ class ProjectToolService:
 
     def __init__(self, workspace_root: Path) -> None:
         self.access = ProjectAccess(workspace_root)
+
+    def list_knowledge_rules(
+        self,
+        region: str | None = None,
+        building_type: str | None = None,
+        evidence_kind: str | None = None,
+        knowledge_version: int | None = None,
+    ) -> dict[str, Any]:
+        """Return source-backed knowledge records without accessing project files."""
+
+        for field_name, value in (("region", region), ("building_type", building_type)):
+            if value is not None and (not isinstance(value, str) or not value.strip()):
+                raise ValueError(f"{field_name} must be a non-empty string when provided")
+        try:
+            evidence_filter = None if evidence_kind is None else EvidenceKind(evidence_kind)
+        except (TypeError, ValueError) as exc:
+            allowed = ", ".join(item.value for item in EvidenceKind)
+            raise ValueError(f"unsupported evidence_kind; expected one of: {allowed}") from exc
+
+        knowledge = load_knowledge_base(knowledge_version)
+        rules = knowledge.rules_for(
+            evidence_filter,
+            region=region,
+            building_type=building_type,
+        )
+        return {
+            "knowledge_base_version": knowledge.version,
+            "filters": {
+                "region": region,
+                "building_type": building_type,
+                "evidence_kind": None if evidence_filter is None else evidence_filter.value,
+                "knowledge_version": knowledge_version,
+            },
+            "rules": [
+                {
+                    "rule_id": rule.rule_id,
+                    "source_id": rule.source_id,
+                    "source": {
+                        "source_id": source.source_id,
+                        "source_type": source.source_type,
+                        "title": source.title,
+                        "locator": source.locator,
+                    },
+                    "applicable_regions": list(rule.applicable_regions),
+                    "building_types": list(rule.building_types),
+                    "evidence_kind": rule.evidence_kind.value,
+                    "basis": rule.basis,
+                    "confidence": rule.confidence.value,
+                    "scope": rule.scope,
+                    "statement": rule.statement,
+                }
+                for rule in rules
+                for source in (knowledge.sources[rule.source_id],)
+            ],
+        }
 
     def list_projects(self) -> list[dict[str, Any]]:
         """List saved project summaries without exposing block maps."""
@@ -362,19 +417,11 @@ class ProjectToolService:
     def _build_module(cls, module_id: str, kind: str, parameters: dict[str, Any]) -> Module:
         if not isinstance(parameters, Mapping):
             raise ValueError("parameters must be a JSON object")
-        values = dict(parameters)
         try:
-            if kind == "hall":
-                through_passage = values.pop("through_passage", False)
-                if not isinstance(through_passage, bool):
-                    raise ValueError("through_passage must be a boolean")
-                return hall_module(module_id, HallParameters(**values), through_passage=through_passage)
-            if kind == "corridor":
-                passage_width = values.pop("passage_width", None)
-                return corridor_module(module_id, CorridorParameters(**values), passage_width=passage_width)
+            asset = get_asset_for_kind(kind)
+            return module_from_asset(module_id, asset.asset_id, parameters)
         except TypeError as exc:
             raise ValueError(f"invalid parameters for {kind!r} module: {exc}") from exc
-        raise ValueError("kind must be hall or corridor")
 
     @classmethod
     def _module_summary(cls, module: Module) -> dict[str, Any]:
@@ -385,6 +432,7 @@ class ProjectToolService:
             "module_id": module.module_id,
             "kind": module.kind,
             "parameters": cls._json_value(module.parameters),
+            "metadata": cls._json_value(module.metadata),
             "block_count": len(module.model.blocks),
             "bounds": None
             if bounds is None

@@ -37,9 +37,26 @@ def create_mcp_server(workspace_root: Path) -> FastMCP:
         instructions=(
             "Use these tools to edit Jiangnan Minecraft building projects in the configured workspace. "
             "Project paths are relative to workspace/projects and exports are relative to workspace/exports. "
-            "Never write into Minecraft saves."
+            "Use list_knowledge_rules for sourced architectural claims and preserve the returned evidence kind, "
+            "source, confidence, and scope. Never write into Minecraft saves."
         ),
     )
+
+    @_strict_tool(server)
+    def list_knowledge_rules(
+        region: str | None = None,
+        building_type: str | None = None,
+        evidence_kind: str | None = None,
+        knowledge_version: int | None = None,
+    ) -> dict[str, Any]:
+        """Read sourced knowledge rules with exact region and building-type filters."""
+
+        return service.list_knowledge_rules(
+            region=region,
+            building_type=building_type,
+            evidence_kind=evidence_kind,
+            knowledge_version=knowledge_version,
+        )
 
     @_strict_tool(server)
     def list_projects() -> list[dict[str, Any]]:

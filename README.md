@@ -20,7 +20,7 @@ python -m pip install -e ".[dev]"
 
 ## Codex 本地建筑工具
 
-Phase 5 通过本机 MCP stdio 服务，让当前 Codex 调用 Python 建筑引擎。模型只选择模块和参数；方块生成、工程保存、校验与 `.schem` 导出都在本机执行。本方案不调用模型 API，也不需要 API 密钥。
+本机 MCP stdio 服务让当前 Codex 调用 Python 建筑引擎和只读知识检索。方块生成、工程保存、校验与 `.schem` 导出都在本机执行；地域知识工具返回文献来源、置信度和适用范围。本方案不调用模型 API，也不需要 API 密钥。
 
 在 `E:\MCbuild` 的 PowerShell 中安装 MCP 可选依赖并注册服务：
 
@@ -35,6 +35,7 @@ codex mcp list
 首版提供以下工具：
 
 - 工程与模块：`list_projects`、`get_project`、`create_project`、`list_modules`、`get_module`、`create_module`
+- 知识查询：`list_knowledge_rules`（支持知识版本、地区、建筑类型和证据类型筛选）
 - 参数与装配：`set_parameters`、`transform_module`、`connect_modules`、`replace_module`
 - 检查与导出：`validate_assembly`、`inspect_changes`、`export_schematic`
 
@@ -62,19 +63,16 @@ jiangnan undo workspace\projects\suzhou-hall.jap.json
 jiangnan redo workspace\projects\suzhou-hall.jap.json
 ```
 
-Python API 可按模块 ID 重新生成厅堂或直廊，记录方块差异，并在工程中保留撤销/重做快照：
+Python API 可按模块 ID 重新生成厅堂或直廊，记录方块差异，并在工程中保留撤销/重做快照：示例先从 `examples/hall_v1_parameters.json` 创建确定的 `hall-main` fixture，再编辑并保存。
 
 ```python
 from pathlib import Path
 
-from jiangnan_agent.assembly import Assembly, hall_module
-from jiangnan_agent.io import JiangnanProject, ProjectEditor, save_project
+from examples.hall_main_fixture import create_hall_main_fixture
+from jiangnan_agent.io import ProjectEditor, save_project
 
 project_path = Path("workspace/projects/editable-hall.jap.json")
-project = JiangnanProject(
-    name="Editable hall",
-    assembly=Assembly((hall_module("hall-main"),)),
-)
+project = create_hall_main_fixture()
 save_project(project, project_path)
 ProjectEditor(project).regenerate_module("hall-main", {"bay_count": 5}, "调整为五开间")
 save_project(project, project_path)
@@ -106,6 +104,14 @@ jiangnan generate --project examples\three_bay_hall.jap.json
 ```
 
 `hall` 工程可调 `bay_count`（奇数开间）、`bay_width`、`depth`、`column_height`、`plinth_height`、`roof_rise`、`eaves`、`door_width` 和 `materials`。生成器会按参数同步调整柱网、梁、墙、门窗、台基、檐口和屋顶。
+
+## 版本化知识、参数与资产
+
+厅堂与直廊的新模块通过版本化资产登记创建，执行仍映射到现有 `HallParameters`、`CorridorParameters` 和生成器。参数 schema 将独立输入、派生结果、硬约束与软提示分开；冲突字段或不支持版本会明确报错。模块工程记录资产、知识库和参数 schema 版本，原有无元数据的工程仍可读取。
+
+当前知识库为 v2：保留 v1 原始记录，并增加有来源、适用地域和范围说明的徽州文献条目。当前资产清单为 v2，厅堂与直廊资产 v2 仍复用参数 schema v1 和现有方块生成器；对相同参数，方块结果保持一致。新生成模块记录知识库 v2，旧工程仍可按其记录的资产/知识版本重新生成。知识条目按地区标签精确筛选，不推断地区层级。
+
+可复现的三开间参数样例见 `examples/hall_v1_parameters.json`（参数 schema v1）。`bay_spacing` 映射到现有参数 `bay_width`；屋顶断面 v1 仅支持生成器当前实现的对称双坡。已登记的徽州资料用于说明有出处的定性事实，不提供未经核实的传统尺寸；用户提供的 `.litematic` 只登记为视觉偏好参考，不作为历史证据。其他候选地域及其“尚未接入”状态见 [`docs/knowledge-regions.md`](docs/knowledge-regions.md)。
 
 ## 三维预览与修改对比
 
@@ -144,9 +150,11 @@ GitHub Actions 在 Windows 和 Ubuntu、Python 3.12 上运行同一套 pytest。
 - `jiangnan_agent/core/`：方块、坐标、边界、稀疏方块模型和变换。
 - `jiangnan_agent/assembly/`：模块锚点、平移/旋转/镜像、连接图、拆分/替换、冲突校验和组合渲染。
 - `jiangnan_agent/io/`：工程 JSON 与 Sponge v3 读写。
+- `jiangnan_agent/knowledge/`、`parameters/`、`assets/`：版本化知识规则、参数 schema 与模块资产清单。
+- `jiangnan_agent/preview/`：Mine2Blend 转换、Blender 四视图渲染和方块差异报告。
 - 工程编辑器保存完整组合快照、方块差异，并提供撤销/重做。
 - `jiangnan_agent/generators/`：基础构件、参数化厅堂/直廊与简单房屋生成器。
 - `tests/`：方块模型、工程 JSON、命令行、Sponge 文件和简单房屋测试。
 - `docs/roadmap.md`：完整九阶段路线图。
 
-后续阶段按路线图逐步增加参数化构件、模块组合、工程历史、AI Agent、Blender 预览和知识库。
+当前工作已包括参数化构件、模块组合、工程历史、Codex 本地工具接入、版本化知识/参数/资产基础，以及 Mine2Blend/Blender 预览。知识查询仅返回有范围标记的规则，不会自动改变生成器。后续按路线图增加可验证的专业构件和更多地域来源。

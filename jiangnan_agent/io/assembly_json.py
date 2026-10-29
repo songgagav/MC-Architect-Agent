@@ -69,17 +69,18 @@ def assembly_to_dict(assembly: Assembly) -> dict[str, Any]:
             {"name": zone.name, "bounds": _box_to_dict(zone.bounds), "purpose": zone.purpose}
             for zone in sorted(module.clearance_zones, key=lambda item: item.name)
         ]
-        modules.append(
-            {
-                "module_id": module.module_id,
-                "kind": module.kind,
-                "parameters": _plain_json(module.parameters),
-                "transform_steps": [_plain_json(step) for step in module.transform_steps],
-                "blocks": blocks,
-                "anchors": anchors,
-                "clearance_zones": clearances,
-            }
-        )
+        raw_module = {
+            "module_id": module.module_id,
+            "kind": module.kind,
+            "parameters": _plain_json(module.parameters),
+            "transform_steps": [_plain_json(step) for step in module.transform_steps],
+            "blocks": blocks,
+            "anchors": anchors,
+            "clearance_zones": clearances,
+        }
+        if module.metadata:
+            raw_module["metadata"] = _plain_json(module.metadata)
+        modules.append(raw_module)
 
     connections = [
         {
@@ -172,10 +173,13 @@ def assembly_from_dict(data: Mapping[str, Any]) -> Assembly:
 
         parameters = raw.get("parameters", {})
         raw_steps = raw.get("transform_steps", [])
+        metadata = raw.get("metadata", {})
         if not isinstance(parameters, Mapping):
             raise ValueError(f"parameters for module {module_id!r} must be a JSON object")
         if not isinstance(raw_steps, (list, tuple)):
             raise ValueError(f"transform_steps for module {module_id!r} must be a list")
+        if not isinstance(metadata, Mapping):
+            raise ValueError(f"metadata for module {module_id!r} must be a JSON object")
         modules.append(
             Module(
                 module_id,
@@ -185,6 +189,7 @@ def assembly_from_dict(data: Mapping[str, Any]) -> Assembly:
                 tuple(clearances),
                 parameters=parameters,
                 transform_steps=tuple(raw_steps),
+                metadata=metadata,
             )
         )
 

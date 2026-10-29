@@ -1,0 +1,30 @@
+{
+  "asset_id": "jiangnan.hall",
+  "asset_version": 2,
+  "parameter_schema_version": 1,
+  "parameters": {
+    "building_type": "hall",
+    "style": "unspecified",
+    "bay_count": 3,
+    "bay_spacing": 5,
+    "depth": 9,
+    "column_height": 4,
+    "plinth_height": 1,
+    "door_width": 2,
+    "roof_type": "gable",
+    "roof_section": {"profile": "symmetric_gable", "rise": 2},
+    "eaves": 1,
+    "materials": {
+      "plinth": "minecraft:smooth_stone",
+      "floor": "minecraft:spruce_planks",
+      "column": "minecraft:stripped_spruce_log",
+      "beam": "minecraft:stripped_spruce_log",
+      "wall": "minecraft:calcite",
+      "door": "minecraft:spruce_door",
+      "window": "minecraft:white_stained_glass_pane",
+      "roof": "minecraft:polished_deepslate_stairs",
+      "eaves": "minecraft:deepslate_tile_slab[type=bottom,waterlogged=false]"
+    },
+    "interfaces": {"through_passage": false}
+  }
+}

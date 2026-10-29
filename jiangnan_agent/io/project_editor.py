@@ -9,6 +9,7 @@ from ..assembly.model import Assembly, Module
 from ..assembly.operations import connect_modules as connect_assembly_modules
 from ..assembly.operations import replace_module as replace_assembly_module
 from ..assembly.transforms import mirror_module, rotate_module, translate_module
+from ..assets import module_from_asset
 from ..core.geometry import Position
 from ..generators.hall import CorridorParameters, HallParameters
 from .assembly_json import assembly_to_dict
@@ -129,28 +130,46 @@ class ProjectEditor:
             raise ValueError("parameter_updates must be a mapping with string keys")
 
         current = self.project.assembly.modules[module_id]
-        parameters = dict(current.parameters)
-        parameters.update(parameter_updates)
         kind = current.kind
         try:
-            if kind == "hall":
-                through_passage = parameters.pop("through_passage", False)
-                if not isinstance(through_passage, bool):
-                    raise ValueError("through_passage must be a boolean")
-                replacement = hall_module(
+            asset_id = current.metadata.get("asset_id")
+            parameter_config = current.metadata.get("parameter_config")
+            schema_version = current.metadata.get("parameter_schema_version")
+            asset_version = current.metadata.get("asset_version")
+            if isinstance(asset_id, str) and isinstance(parameter_config, Mapping):
+                if isinstance(schema_version, bool) or not isinstance(schema_version, int):
+                    raise ValueError(f"versioned module {module_id!r} has invalid parameter schema metadata")
+                if isinstance(asset_version, bool) or not isinstance(asset_version, int):
+                    raise ValueError(f"versioned module {module_id!r} has invalid asset version metadata")
+                replacement = module_from_asset(
                     module_id,
-                    HallParameters(**parameters),
-                    through_passage=through_passage,
-                )
-            elif kind == "corridor":
-                passage_width = parameters.pop("passage_width", None)
-                replacement = corridor_module(
-                    module_id,
-                    CorridorParameters(**parameters),
-                    passage_width=passage_width,
+                    asset_id,
+                    parameter_updates,
+                    schema_version=schema_version,
+                    asset_version=asset_version,
+                    base_config=parameter_config,
                 )
             else:
-                raise ValueError(f"module kind {kind!r} cannot be regenerated")
+                parameters = dict(current.parameters)
+                parameters.update(parameter_updates)
+                if kind == "hall":
+                    through_passage = parameters.pop("through_passage", False)
+                    if not isinstance(through_passage, bool):
+                        raise ValueError("through_passage must be a boolean")
+                    replacement = hall_module(
+                        module_id,
+                        HallParameters(**parameters),
+                        through_passage=through_passage,
+                    )
+                elif kind == "corridor":
+                    passage_width = parameters.pop("passage_width", None)
+                    replacement = corridor_module(
+                        module_id,
+                        CorridorParameters(**parameters),
+                        passage_width=passage_width,
+                    )
+                else:
+                    raise ValueError(f"module kind {kind!r} cannot be regenerated")
         except TypeError as exc:
             raise ValueError(f"invalid parameters for {kind} module: {exc}") from exc
 

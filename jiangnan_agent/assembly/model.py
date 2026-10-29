@@ -100,6 +100,7 @@ class Module:
     clearance_zones: tuple[ClearanceZone, ...] = ()
     parameters: Mapping[str, JSONValue] = field(default_factory=dict)
     transform_steps: tuple[Mapping[str, JSONValue], ...] = ()
+    metadata: Mapping[str, JSONValue] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         _nonempty_string(self.module_id, "module ID")
@@ -124,6 +125,11 @@ class Module:
         frozen_parameters = _freeze_json(self.parameters, "module parameters")
         if not isinstance(frozen_parameters, Mapping):
             raise ValueError("module parameters must be a JSON object")
+        if not isinstance(self.metadata, Mapping):
+            raise ValueError("module metadata must be a JSON object")
+        frozen_metadata = _freeze_json(self.metadata, "module metadata")
+        if not isinstance(frozen_metadata, Mapping):
+            raise ValueError("module metadata must be a JSON object")
         transform_steps = tuple(self.transform_steps)
         frozen_steps: list[Mapping[str, JSONValue]] = []
         for step in transform_steps:
@@ -140,6 +146,7 @@ class Module:
         object.__setattr__(self, "clearance_zones", clearance_zones)
         object.__setattr__(self, "parameters", frozen_parameters)
         object.__setattr__(self, "transform_steps", tuple(frozen_steps))
+        object.__setattr__(self, "metadata", frozen_metadata)
 
     def anchor(self, name: str) -> ConnectionAnchor:
         """Return a named anchor or raise a clear lookup error."""
