@@ -98,10 +98,11 @@
 - `ProjectEditor(project).undo() -> bool`, `.redo() -> bool`, `.can_undo`, `.can_redo`.
 - Regeneration supports `hall` and `corridor`, retains stable ID and transform recipes, and does not mutate other modules.
 
-- [ ] **Step 1: Write failing tests** for targeted regeneration, unchanged neighboring modules, changed block reports, persistence-ready undo/redo, redo-branch truncation, and connected-module validation after a size change.
-- [ ] **Step 2: Run** `pytest tests/test_project_editor.py -q`; confirm the editor APIs are absent.
-- [ ] **Step 3: Implement** immutable replacement, parameter regeneration with transform replay, revision recording, undo/redo, and change inspection.
-- [ ] **Step 4: Re-run** focused tests and `pytest -q`.
+- [x] **Step 1: Write failing tests** for targeted regeneration, unchanged neighboring modules, changed block reports, persistence-ready undo/redo, redo-branch truncation, and connected-module validation after a size change.
+- [x] **Step 2: Run** `pytest tests/test_project_editor.py -q`; confirm the editor APIs are absent.
+- [x] **Step 3: Implement** immutable replacement, parameter regeneration with transform replay, revision recording, undo/redo, and change inspection.
+- [x] **Step 4: Re-run** focused tests and `pytest -q`.
+- [x] **Step 5: Commit** Task 4 as `feat: edit modules with project history`.
 
 ### Task 5: Expose History Navigation and Document Phase 4
 
