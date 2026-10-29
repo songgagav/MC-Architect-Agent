@@ -56,6 +56,8 @@ jiangnan generate --project workspace\projects\suzhou-hall.jap.json
 
 默认生成到 `workspace\exports` 下的安全文件名 `.schem`。`simple_house` 可调整 `width`、`length`、`wall_height`、`roof_overhang` 和方块材料。`.schem` 为 Sponge v3 gzip-NBT，可使用 WorldEdit 导入测试世界。不要让生成器直接写入已有 Minecraft 存档。
 
+当工程中存在 Assembly 模块时，`generate` 会先验证并导出当前模块组合；Assembly 为空的旧工程继续按 `settings.building` 生成单体房屋或厅堂。
+
 仓库内的示例工程：
 
 ```powershell

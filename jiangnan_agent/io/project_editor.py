@@ -9,6 +9,7 @@ from ..assembly.model import Assembly, Module
 from ..assembly.operations import replace_module as replace_assembly_module
 from ..assembly.transforms import mirror_module, rotate_module, translate_module
 from ..generators.hall import CorridorParameters, HallParameters
+from .assembly_json import assembly_to_dict
 from .project_history import ProjectRevision, diff_assemblies
 from .project_json import JiangnanProject
 
@@ -34,6 +35,7 @@ class ProjectEditor:
         return self.project.revision_history[self.project.revision_cursor]
 
     def replace_module(self, module_id: str, replacement: Module, message: str) -> ProjectRevision:
+        self._ensure_current_snapshot()
         if module_id not in self.project.assembly.modules:
             raise ValueError(f"unknown module ID: {module_id!r}")
         next_assembly = replace_assembly_module(self.project.assembly, module_id, replacement)
@@ -45,6 +47,7 @@ class ProjectEditor:
         parameter_updates: Mapping[str, object],
         message: str,
     ) -> ProjectRevision:
+        self._ensure_current_snapshot()
         if module_id not in self.project.assembly.modules:
             raise ValueError(f"unknown module ID: {module_id!r}")
         if not isinstance(parameter_updates, Mapping) or any(not isinstance(key, str) for key in parameter_updates):
@@ -101,6 +104,7 @@ class ProjectEditor:
     def undo(self) -> bool:
         if not self.can_undo:
             return False
+        self._ensure_current_snapshot()
         self.project.revision_cursor -= 1
         self.project.assembly = self.current_revision.restore_assembly()
         return True
@@ -108,12 +112,13 @@ class ProjectEditor:
     def redo(self) -> bool:
         if not self.can_redo:
             return False
+        self._ensure_current_snapshot()
         self.project.revision_cursor += 1
         self.project.assembly = self.current_revision.restore_assembly()
         return True
 
     def _record(self, assembly: Assembly, module_id: str, message: str) -> ProjectRevision:
-        before = self.project.assembly
+        before = self.current_revision.restore_assembly()
         changed_module_ids, block_changes = diff_assemblies(before, assembly)
         changed_module_ids = tuple(sorted(set(changed_module_ids) | {module_id}))
         parent = self.current_revision
@@ -130,3 +135,10 @@ class ProjectEditor:
         self.project.revision_history = [*history, revision]
         self.project.revision_cursor = len(self.project.revision_history) - 1
         return revision
+
+    def _ensure_current_snapshot(self) -> None:
+        committed = self.current_revision.restore_assembly()
+        if assembly_to_dict(committed) != assembly_to_dict(self.project.assembly):
+            raise ValueError(
+                "current Assembly has unrecorded changes that differ from the selected revision snapshot"
+            )

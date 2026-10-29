@@ -95,6 +95,17 @@ def test_building_adapters_capture_generator_parameters() -> None:
 
     assert hall.parameters["bay_count"] == 5
     assert hall.parameters["materials"]["roof"] == "minecraft:stone_stairs"
+    assert hall.parameters["materials"]["wall"] == "minecraft:calcite"
     assert hall.parameters["through_passage"] is True
     assert corridor.parameters["length"] == 13
     assert corridor.parameters["passage_width"] == 2
+
+
+def test_building_adapters_store_effective_default_materials() -> None:
+    from jiangnan_agent.assembly.adapters import corridor_module, hall_module
+
+    hall = hall_module("hall-defaults")
+    corridor = corridor_module("corridor-defaults")
+
+    assert hall.parameters["materials"]["roof"] == "minecraft:polished_deepslate_stairs"
+    assert corridor.parameters["materials"]["floor"] == "minecraft:spruce_planks"

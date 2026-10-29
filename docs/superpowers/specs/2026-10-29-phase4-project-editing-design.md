@@ -34,7 +34,7 @@
 - `ProjectRevision` 保存连续整数 ID、父版本、UTC 时间、说明、模块 ID、精确 `BlockChange` 列表和不可变 JSON Assembly 快照。当前工程状态由历史游标指向；新编辑会裁掉游标之后的重做分支。
 - `ProjectEditor.regenerate_module()` 合并该模块的参数变更，只支持 `hall` 和 `corridor`；从生成器创建新模块，再按保存顺序重放变换步骤。替换保留模块 ID 和连接记录；其他模块对象与方块不变。锚点/冲突检查继续由现有 `validate_assembly()` 承担。
 - 工程文件沿用同目录临时文件、flush/fsync 和原子替换保存方式；JSON 不允许 NaN/Infinity。
-- CLI 增加 `history`、`undo`、`redo`；不增加写入游戏世界的命令。
+- CLI 增加 `history`、`undo`、`redo`；`generate` 在 Assembly 非空时校验并导出当前组合，Assembly 为空时沿用旧 `settings.building` 生成流程；不增加写入游戏世界的命令。
 
 ## 验收
 
@@ -42,4 +42,4 @@
 - 楼梯、门等带状态方块以及负坐标、空模块、锚点和净空区可无损往返。
 - 修改厅堂/直廊参数只替换目标模块，原参数、变换顺序、锚点和状态随生成器重建；其他模块的模型映射不变。
 - 历史记录准确列出新增、删除和状态变化方块；保存重开后撤销/重做仍可用；撤销后新编辑不再能重做旧分支。
-- CLI 可查看历史并执行持久化撤销/重做；全套 pytest 通过，Minecraft/WorldEdit 实机验收仍单独标记。
+- CLI 可查看历史并执行持久化撤销/重做；非空 Assembly 可通过 `generate` 导出，空 Assembly 保留旧设置生成流程；全套 pytest 通过，Minecraft/WorldEdit 实机验收仍单独标记。

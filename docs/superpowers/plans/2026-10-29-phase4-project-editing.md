@@ -115,10 +115,11 @@
 **Interfaces:**
 - `jiangnan history PROJECT`, `jiangnan undo PROJECT`, and `jiangnan redo PROJECT` operate on the saved `.jap.json`.
 - `info` reports the selected revision and module count from the Assembly.
+- `generate --project PROJECT` validates and exports a non-empty Assembly; an empty Assembly keeps the legacy `settings.building` path.
 
-- [x] **Step 1: Write failing CLI tests** for history output, saved undo/redo round-trip, and nonzero/no-write behavior when no undo/redo is available.
+- [x] **Step 1: Write failing CLI tests** for history output, saved undo/redo round-trip, nonzero/no-write behavior when no undo/redo is available, and exporting a saved Assembly instead of legacy settings.
 - [x] **Step 2: Run** `pytest tests/test_cli.py -q`; confirm the new commands are unrecognized.
-- [x] **Step 3: Implement** the three commands and update user documentation/roadmap with automated versus in-game acceptance status.
+- [x] **Step 3: Implement** history commands and Assembly-first generation, then update user documentation/roadmap with automated versus in-game acceptance status.
 - [x] **Step 4: Run** `pytest -q` and the CLI history flow against a temporary project; run `git diff --check`.
 - [x] **Step 5: Commit** Task 5 as `feat: expose project history commands`.
 
@@ -126,8 +127,8 @@
 
 **Files:** all Phase 4 files above.
 
-- [ ] **Step 1:** Re-read this plan and the design spec; verify each acceptance requirement against an implementation or test.
-- [ ] **Step 2:** Run full pytest and `git diff --check`; inspect working tree and complete change summary.
-- [ ] **Step 3:** Perform the required whole-branch review; fix Critical/Important findings with regression tests, ledger deferred minors and rulings.
-- [ ] **Step 4:** Commit Phase 4 after verification; keep Phase 4 on its own branch.
+- [x] **Step 1:** Re-read this plan and the design spec; verify each acceptance requirement against an implementation or test.
+- [x] **Step 2:** Run full pytest and `git diff --check`; inspect working tree and complete change summary.
+- [x] **Step 3:** Perform the required whole-branch review; fix Critical/Important findings with regression tests, ledger deferred minors and rulings.
+- [x] **Step 4:** Commit Phase 4 after verification; keep Phase 4 on its own branch.
 

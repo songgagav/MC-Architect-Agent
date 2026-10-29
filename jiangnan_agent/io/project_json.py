@@ -91,7 +91,9 @@ class JiangnanProject:
         if missing:
             raise ValueError(f"project JSON is missing required fields: {', '.join(sorted(missing))}")
         try:
-            source_version = int(data.get("format_version", LEGACY_PROJECT_FORMAT_VERSION))
+            source_version = data.get("format_version", LEGACY_PROJECT_FORMAT_VERSION)
+            if isinstance(source_version, bool) or not isinstance(source_version, int):
+                raise ValueError(f"unsupported project format version: {source_version!r}")
             if source_version not in (LEGACY_PROJECT_FORMAT_VERSION, PROJECT_FORMAT_VERSION):
                 raise ValueError(f"unsupported project format version: {source_version}")
             assembly = (

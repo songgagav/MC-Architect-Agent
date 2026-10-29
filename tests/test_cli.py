@@ -6,7 +6,8 @@ from pathlib import Path
 
 from jiangnan_agent.generators.hall import HallParameters, generate_hall
 from jiangnan_agent.assembly.adapters import hall_module
-from jiangnan_agent.assembly.model import Assembly
+from jiangnan_agent.assembly.model import Assembly, Module
+from jiangnan_agent.core.scene import VoxelModel
 from jiangnan_agent.io.project_editor import ProjectEditor
 from jiangnan_agent.io.project_json import JiangnanProject, load_project, save_project
 from jiangnan_agent.io.schematic import read_schematic
@@ -79,6 +80,25 @@ def test_generate_hall_writes_readable_schematic(tmp_path: Path) -> None:
         -expected.bounds.min_z,
     )
     assert schematic.model.blocks == normalized_expected.blocks
+
+
+def test_generate_exports_saved_assembly_instead_of_legacy_building_settings(tmp_path: Path) -> None:
+    project_path = tmp_path / "assembly.jap.json"
+    schematic_path = tmp_path / "assembly.schem"
+    model = VoxelModel()
+    model.set_block((-5, 2, 3), "minecraft:gold_block")
+    project = JiangnanProject(
+        name="Assembly wins",
+        settings={"building": {"type": "simple_house", "width": 9}},
+        assembly=Assembly((Module("custom-1", "custom", model),)),
+    )
+    save_project(project, project_path)
+
+    generated = run_cli("generate", "--project", str(project_path), "--output", str(schematic_path))
+
+    assert generated.returncode == 0, generated.stderr
+    schematic = read_schematic(schematic_path)
+    assert schematic.model.blocks == {(0, 0, 0): next(iter(model.blocks.values()))}
 
 
 def test_history_lists_revisions_and_affected_modules(tmp_path: Path) -> None:

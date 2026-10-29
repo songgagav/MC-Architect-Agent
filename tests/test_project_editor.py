@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from jiangnan_agent.assembly.adapters import corridor_module, hall_module
 from jiangnan_agent.assembly.model import Assembly, Connection, ConnectionAnchor, Module
 from jiangnan_agent.assembly.transforms import mirror_module, rotate_module, translate_module
@@ -117,3 +119,29 @@ def test_replacing_module_keeps_its_id_and_reports_block_changes() -> None:
     assert project.assembly.modules["corridor-1"] is untouched
     assert revision.changed_module_ids == ("hall-1",)
     assert revision.block_changes
+
+
+def test_edit_rejects_unrecorded_mutation_in_another_module() -> None:
+    project = make_project()
+    editor = ProjectEditor(project)
+    project.assembly.modules["corridor-1"].model.set_block((0, 0, 0), "minecraft:gold_block")
+
+    with pytest.raises(ValueError, match="revision snapshot"):
+        editor.regenerate_module("hall-1", {"bay_count": 5}, "Widen hall")
+
+    assert len(project.revision_history) == 1
+    assert project.revision_history[0].changed_module_ids == ()
+    assert project.assembly.modules["corridor-1"].model.block_at((0, 0, 0)).block_id == "minecraft:gold_block"
+
+
+def test_undo_rejects_unrecorded_live_model_mutation() -> None:
+    project = make_project()
+    editor = ProjectEditor(project)
+    editor.regenerate_module("hall-1", {"bay_count": 5}, "Widen hall")
+    project.assembly.modules["corridor-1"].model.set_block((0, 0, 0), "minecraft:gold_block")
+
+    with pytest.raises(ValueError, match="revision snapshot"):
+        editor.undo()
+
+    assert project.revision_cursor == 1
+    assert project.assembly.modules["corridor-1"].model.block_at((0, 0, 0)).block_id == "minecraft:gold_block"

@@ -11,6 +11,8 @@ from ..core.scene import AIR
 from ..generators.components import generate_door
 from ..generators.hall import (
     CorridorParameters,
+    DEFAULT_CORRIDOR_MATERIALS,
+    DEFAULT_HALL_MATERIALS,
     HallParameters,
     generate_corridor,
     generate_hall,
@@ -20,11 +22,16 @@ from .model import ClearanceZone, ConnectionAnchor, Module
 _OPPOSITE = {"north": "south", "east": "west", "south": "north", "west": "east"}
 
 
-def _parameters_dict(parameters) -> dict[str, object]:
+def _parameters_dict(parameters, defaults: Mapping[str, str]) -> dict[str, object]:
     values: dict[str, object] = {}
     for item in fields(parameters):
         value = getattr(parameters, item.name)
-        values[item.name] = dict(value) if isinstance(value, Mapping) else value
+        if item.name == "materials":
+            materials = dict(defaults)
+            materials.update(value or {})
+            values[item.name] = materials
+        else:
+            values[item.name] = value
     return values
 
 
@@ -135,7 +142,7 @@ def hall_module(
             )
         )
 
-    saved_parameters = _parameters_dict(parameters)
+    saved_parameters = _parameters_dict(parameters, DEFAULT_HALL_MATERIALS)
     saved_parameters["through_passage"] = through_passage
     return Module(
         module_id,
@@ -184,7 +191,7 @@ def corridor_module(
             "eaves",
         ),
     )
-    saved_parameters = _parameters_dict(parameters)
+    saved_parameters = _parameters_dict(parameters, DEFAULT_CORRIDOR_MATERIALS)
     saved_parameters["passage_width"] = passage_width
     return Module(
         module_id,

@@ -102,6 +102,18 @@ def test_project_format_two_rejects_malformed_assembly() -> None:
         JiangnanProject.from_dict({"name": "bad", "format_version": 2, "assembly": {"modules": "invalid"}})
 
 
+@pytest.mark.parametrize("version", [True, 1.9, 2.9, "1", float("nan"), float("inf")])
+def test_project_rejects_non_integer_format_versions(version) -> None:
+    with pytest.raises(ValueError, match="format version"):
+        JiangnanProject.from_dict(
+            {
+                "name": "Malformed version",
+                "format_version": version,
+                "assembly": assembly_to_dict(make_persistable_assembly()),
+            }
+        )
+
+
 def test_project_save_and_load_preserves_revision_history_and_cursor(tmp_path) -> None:
     initial = make_persistable_assembly()
     changed_model = VoxelModel()
