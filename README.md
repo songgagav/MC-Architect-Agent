@@ -9,7 +9,7 @@
 ```powershell
 cd E:\MCbuild
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
 也可以直接调用虚拟环境的 Python：
@@ -107,11 +107,11 @@ jiangnan generate --project examples\three_bay_hall.jap.json
 
 ## 版本化知识、参数与资产
 
-厅堂与直廊的新模块通过版本化资产登记创建，执行仍映射到现有 `HallParameters`、`CorridorParameters` 和生成器。参数 schema 将独立输入、派生结果、硬约束与软提示分开；冲突字段或不支持版本会明确报错。模块工程记录资产、知识库和参数 schema 版本，原有无元数据的工程仍可读取。
+厅堂与直廊的新模块通过版本化资产登记创建，执行仍映射到现有 `HallParameters`、`CorridorParameters` 和生成器。参数 schema 将独立输入、派生结果、硬约束与软提示分开，并记录参数来源类别；冲突字段或不支持版本会明确报错。模块工程记录资产、知识库、参数 schema 和来源元数据，旧工程仍可读取。
 
-当前知识库默认为 v3，来源、规则和地域配置分别存放；v1/v2 可显式读取。只有 `huizhou_core`（西递、宏村的村落级官方描述）和 `jiangnan_suzhou`（苏州古典园林的园林级官方描述）启用。其他候选地域为 `catalog_only`；未取得全文和定位的地方资料及对应规则标为待核查，并从普通查询中隐藏。当前资产清单仍为 v2，厅堂与直廊资产 v2 复用参数 schema v1 和现有方块生成器；相同输入的方块结果保持一致。知识规则按地域 ID 精确筛选，不推断地区层级，也不把描述性史料转换成未证实的尺寸。
+当前知识库默认为 v3，来源、规则和地域配置分别存放；v1/v2 可显式读取。只有 `huizhou_core`（西递、宏村的村落级官方描述）和 `jiangnan_suzhou`（苏州古典园林的园林级官方描述）启用。其他候选地域为 `catalog_only`；未取得全文和定位的地方资料及对应规则标为待核查，并从普通查询中隐藏。当前资产目录为 v3，hall/corridor 资产 v3 使用参数 schema v2，并仍调用原有方块生成器；v1/v2 资产和 schema 保持可读，既有方块输出不变。新资产的地域标签只表达设计目标，不代表历史形制已经验证。
 
-可复现的三开间参数样例见 `examples/hall_v1_parameters.json`（参数 schema v1）。`bay_spacing` 映射到现有参数 `bay_width`；屋顶断面 v1 仅支持生成器当前实现的对称双坡。地域范围、来源核查等级和待核查记录见 [`docs/knowledge-regions.md`](docs/knowledge-regions.md)。用户 `.litematic` 只登记为视觉偏好参考，不作为历史证据。
+可复现的三开间参数样例见 `examples/hall_v1_parameters.json`（为兼容演示而固定 asset v2/schema v1）。`bay_spacing` 映射到现有参数 `bay_width`；当前屋顶断面仅支持生成器实现的对称双坡。新参数的来源类别和模块资产示例见 [`docs/parameter-registry.md`](docs/parameter-registry.md)；地域范围、来源核查等级和待核查记录见 [`docs/knowledge-regions.md`](docs/knowledge-regions.md)。用户 `.litematic` 只登记为视觉偏好参考，不作为历史证据。
 
 ## 三维预览与修改对比
 
@@ -143,7 +143,14 @@ python -m examples.two_courtyard
 python -m pytest
 ```
 
-GitHub Actions 在 Windows 和 Ubuntu、Python 3.12 上运行同一套 pytest。
+GitHub Actions 的必需验收运行于 Windows x64、Python 3.12，并安装 `[dev,mcp]`；Ubuntu 只作非阻塞的兼容性检查。推荐本机在 Windows PowerShell 中运行：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,mcp]"
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+真实软件验收状态与复现步骤见 [`docs/windows-acceptance.md`](docs/windows-acceptance.md)。
 
 ## 目录
 

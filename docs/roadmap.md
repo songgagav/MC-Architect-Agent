@@ -38,7 +38,7 @@
 
 ### Phase 7 — 江南古建筑知识库与专业构件
 
-Knowledge Base v3 将来源、规则、地域配置拆分为独立版本化文件，并为规则登记来源元数据、地域、核查状态和适用范围。当前仅 `huizhou_core`（西递、宏村的 UNESCO 村落级描述）与 `jiangnan_suzhou`（苏州古典园林的 UNESCO 园林级描述）处于 active；其他地域为 `catalog_only`。本次无法读取全文的地方网页及相关旧摘要留在 pending 状态，不进入默认查询或生成。知识库 v1/v2、参数 schema v1、资产目录 v1/v2 保持兼容。下一步为 hall/corridor 增加来源类别明确的参数 schema v2 和地域/规则关联的资产目录 v3；默认数值只作为可复现的 Minecraft 输入，不得称作历史标准。
+Knowledge Base v3 已将来源、规则、地域配置拆分为独立版本化文件，并为规则登记来源元数据、地域、核查状态和适用范围。当前仅 `huizhou_core`（西递、宏村的 UNESCO 村落级描述）与 `jiangnan_suzhou`（苏州古典园林的 UNESCO 园林级描述）处于 active；其他地域为 `catalog_only`。本次无法读取全文的地方网页及相关旧摘要留在 pending 状态，不进入默认查询或生成。知识库 v1/v2 保持兼容。hall/corridor 参数 schema v2 和资产目录 v3 已登记五类来源、地域设计目标、知识上下文引用和 Minecraft 1.21.5；现有 generator 与模块接口不变，asset/schema v1/v2 保持兼容。数值默认值只作为可复现的 Minecraft 输入，不是历史标准。后续为新构件引入可核查的调查和测绘来源，并仅在有证据的字段启用相应 provenance 类别。
 
 ### Phase 8 — 本地设计工作台与完整验收
 

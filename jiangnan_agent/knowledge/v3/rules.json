@@ -15,6 +15,19 @@
       "status": "active"
     },
     {
+      "rule_id": "hall-front-window-width",
+      "source_id": "generator.hall.v1",
+      "applicable_regions": ["unspecified"],
+      "building_types": ["hall"],
+      "evidence_kind": "minecraft_adaptation",
+      "basis": "The current generator uses min(2, bay_width - 3) for a front-window width.",
+      "confidence": "high",
+      "scope": "Current Minecraft block output warning only; it is not an architectural recommendation.",
+      "statement": "A bay spacing below five blocks narrows the default front window in the current generator.",
+      "verification_level": "repository_inspected",
+      "status": "active"
+    },
+    {
       "rule_id": "corridor-post-grid",
       "source_id": "generator.corridor.v1",
       "applicable_regions": ["unspecified"],
@@ -94,7 +107,7 @@
     },
     {
       "rule_id": "hui-materials-and-gable-decoration",
-      "source_id": "huangshan.gazette.hui-residence-elements.2021",
+      "source_id": "huangshan.gazette.hui-residence-elements",
       "applicable_regions": ["huizhou_core"],
       "building_types": ["residential_building", "residential_compound"],
       "evidence_kind": "literature_fact",
@@ -107,7 +120,7 @@
     },
     {
       "rule_id": "hui-courtyard-and-sequential-compound",
-      "source_id": "huangshan.gazette.hui-residence-elements.2021",
+      "source_id": "huangshan.gazette.hui-residence-elements",
       "applicable_regions": ["huizhou_core"],
       "building_types": ["residential_building", "residential_compound"],
       "evidence_kind": "literature_fact",

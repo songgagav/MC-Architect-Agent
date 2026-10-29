@@ -17,6 +17,8 @@ def module_from_asset(
     schema_version: int | None = None,
     asset_version: int | None = None,
     base_config=None,
+    provenance=None,
+    base_provenance=None,
 ) -> Module:
     asset = get_asset(asset_id, asset_version)
     resolved = resolve_parameters(
@@ -25,6 +27,8 @@ def module_from_asset(
         schema_version=schema_version,
         base_config=base_config,
         asset_version=asset.version,
+        provenance=provenance,
+        base_provenance=base_provenance,
     )
     options = dict(resolved.adapter_options)
     if asset.kind == "hall" and isinstance(resolved.generator_parameters, HallParameters):
@@ -55,6 +59,19 @@ def module_from_asset(
             for warning in resolved.warnings
         ],
     }
+    if asset.parameter_schema_version >= 2:
+        metadata["parameter_provenance"] = dict(resolved.parameter_provenance)
+        metadata["derived_provenance"] = dict(resolved.derived_provenance)
+    if asset.version >= 3:
+        metadata.update(
+            {
+                "minecraft_version": asset.minecraft_version,
+                "region_ids": list(asset.region_ids),
+                "knowledge_context_rule_ids": list(asset.knowledge_rule_ids),
+                "region_association_kind": asset.region_association_kind,
+                "region_association_note": asset.region_association_note,
+            }
+        )
     return Module(
         module.module_id,
         module.kind,

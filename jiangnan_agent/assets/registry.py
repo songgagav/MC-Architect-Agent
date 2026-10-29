@@ -20,6 +20,11 @@ class AssetSpec:
     knowledge_base_version: int
     source_id: str
     anchor_interfaces: tuple[str, ...]
+    region_ids: tuple[str, ...] = ()
+    knowledge_rule_ids: tuple[str, ...] = ()
+    minecraft_version: str | None = None
+    region_association_kind: str = "unclassified"
+    region_association_note: str = ""
 
     def __post_init__(self) -> None:
         for name in ("asset_id", "kind", "parameter_schema_id", "source_id"):
@@ -31,6 +36,25 @@ class AssetSpec:
                 raise ValueError(f"{name} must be a positive integer")
         if not self.anchor_interfaces or any(not isinstance(item, str) or not item for item in self.anchor_interfaces):
             raise ValueError("anchor_interfaces must contain non-empty anchor names")
+        for field_name, values in (("region_ids", self.region_ids), ("knowledge_rule_ids", self.knowledge_rule_ids)):
+            if any(not isinstance(item, str) or not item for item in values):
+                raise ValueError(f"{field_name} must contain non-empty strings")
+        if self.minecraft_version is not None and (
+            not isinstance(self.minecraft_version, str) or not self.minecraft_version.strip()
+        ):
+            raise ValueError("minecraft_version must be null or a non-empty string")
+        if self.region_association_kind not in {"unclassified", "design_target"}:
+            raise ValueError("region_association_kind must be unclassified or design_target")
+        if not isinstance(self.region_association_note, str):
+            raise ValueError("region_association_note must be a string")
+        if self.version >= 3 and (
+            not self.region_ids
+            or not self.knowledge_rule_ids
+            or self.minecraft_version != "1.21.5"
+            or self.region_association_kind != "design_target"
+            or not self.region_association_note.strip()
+        ):
+            raise ValueError("version 3 assets need region/rule links and Minecraft 1.21.5 design-target metadata")
 
 
 @lru_cache(maxsize=None)
@@ -58,6 +82,11 @@ def list_assets(version: int | None = None) -> tuple[AssetSpec, ...]:
             knowledge_base_version=item["knowledge_base_version"],
             source_id=item["source_id"],
             anchor_interfaces=tuple(item["anchor_interfaces"]),
+            region_ids=tuple(item.get("region_ids", [])),
+            knowledge_rule_ids=tuple(item.get("knowledge_rule_ids", [])),
+            minecraft_version=item.get("minecraft_version"),
+            region_association_kind=item.get("region_association_kind", "unclassified"),
+            region_association_note=item.get("region_association_note", ""),
         )
         for item in data.get("assets", [])
     )
@@ -69,6 +98,27 @@ def list_assets(version: int | None = None) -> tuple[AssetSpec, ...]:
             raise ValueError(
                 f"asset {asset.asset_id!r} references unknown knowledge source {asset.source_id!r}"
             )
+        if asset.version >= 3:
+            if knowledge.sources[asset.source_id].source_type != "project_code":
+                raise ValueError(f"asset {asset.asset_id!r} must cite its generator source code")
+            profiles = knowledge.regions
+            for region_id in asset.region_ids:
+                profile = profiles.get(region_id)
+                if profile is None or profile.status.value != "active":
+                    raise ValueError(
+                        f"asset {asset.asset_id!r} references non-active region {region_id!r}"
+                    )
+            rules = {rule.rule_id: rule for rule in knowledge.rules}
+            for rule_id in asset.knowledge_rule_ids:
+                rule = rules.get(rule_id)
+                if rule is None or rule.status != "active":
+                    raise ValueError(
+                        f"asset {asset.asset_id!r} references unknown or inactive knowledge rule {rule_id!r}"
+                    )
+                if not set(asset.region_ids).intersection(rule.applicable_regions):
+                    raise ValueError(
+                        f"asset {asset.asset_id!r} has a knowledge rule outside its design-target regions: {rule_id!r}"
+                    )
         kind_asset_ids.setdefault(asset.kind, set()).add(asset.asset_id)
     if len(id_versions) != len(set(id_versions)) or any(len(ids) > 1 for ids in kind_asset_ids.values()):
         raise ValueError("asset ID/version pairs must be unique and each generator kind needs one stable asset ID")

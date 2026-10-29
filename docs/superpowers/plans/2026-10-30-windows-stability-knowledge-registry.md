@@ -74,7 +74,7 @@
 - [x] Populate rules only from verified UNESCO pages or code/user records; label municipality pages blocked from full-text verification as pending, and exclude them from normal active queries.
 - [x] Document source locators, dates as published or explicitly unstated, access date, confidence, profile scope, and unresolved evidence. Do not register unverified dimensions.
 - [x] Run knowledge, regional filter, MCP knowledge protocol, and legacy-version tests.
-- [ ] Commit the knowledge deliverable separately.
+- [x] Commit the knowledge deliverable separately.
 
 ### Task 3: Parameter provenance and hall/corridor asset registry
 
@@ -88,13 +88,13 @@
 - Parameter categories are `user_input`, `literature_reference`, `survey_data`, `derived`, and `minecraft_adaptation`.
 - New assets cite active region profiles and knowledge rules, declare Minecraft 1.21.5 compatibility, and preserve v1/v2 catalog reads.
 
-- [ ] Add failing tests for parameter-category validation, field source references, derived provenance, regional/rule integrity, asset/schema version compatibility, deterministic module output, and metadata persistence through edit/save/reopen.
-- [ ] Verify the new tests fail before implementation.
-- [ ] Add v2 schemas with defaults clearly marked as game-grid adaptation or unspecified input, not historical standards; link only evidence actually supported by rules.
-- [ ] Add v3 hall/corridor assets with region scope explicitly labeled as a design target, not historical validation.
-- [ ] Preserve old v1/v2 module generation and metadata contracts.
-- [ ] Run schema, asset, edit/history, serialization, determinism, and schematic round-trip tests.
-- [ ] Commit the parameter/asset deliverable separately.
+- [x] Add failing tests for parameter-category validation, field source references, derived provenance, regional/rule integrity, asset/schema version compatibility, deterministic module output, and metadata persistence through edit/save/reopen.
+- [x] Verify the new tests fail before implementation.
+- [x] Add v2 schemas with defaults clearly marked as game-grid adaptation or unspecified input, not historical standards; link only evidence actually supported by rules.
+- [x] Add v3 hall/corridor assets with region scope explicitly labeled as a design target, not historical validation.
+- [x] Preserve old v1/v2 module generation and metadata contracts.
+- [x] Run schema, asset, edit/history, serialization, determinism, and schematic round-trip tests.
+- [x] Commit the parameter/asset deliverable separately.
 
 ### Task 4: Windows acceptance and final review
 
@@ -102,8 +102,8 @@
 - Modify: `docs/windows-acceptance.md`, `README.md`, `docs/roadmap.md`
 - Test: full `tests/` suite and GitHub Actions Windows job
 
-- [ ] Document reproducible Windows commands for `[dev,mcp]`, MCP stdio, Blender/Mine2Blend import/render, and Minecraft 1.21.5 + WorldEdit placement/readback.
-- [ ] Identify which app-level gates were run and leave all others `pending`.
+- [x] Document reproducible Windows commands for `[dev,mcp]`, MCP stdio, Blender/Mine2Blend import/render, and Minecraft 1.21.5 + WorldEdit placement/readback.
+- [x] Identify which app-level gates were run and leave all others `pending`.
 - [ ] Run full pytest from the project `.venv`, inspect final diff and Git status, and record the actual Windows CI check URL/result.
 - [ ] Push the feature branch and create a PR for integration only after the required Windows check passes; never push directly to `main`.
 - [ ] Keep Task 1/2/3 commits separate and summarize tests, sample JSON, change report, and follow-up work in the PR description.

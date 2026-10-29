@@ -12,7 +12,13 @@ from jiangnan_agent.io.project_editor import ProjectEditor
 from jiangnan_agent.io.project_generation import generate_project_model
 from jiangnan_agent.io.project_json import JiangnanProject, load_project, save_project
 from jiangnan_agent.knowledge import EvidenceKind, load_knowledge_base
-from jiangnan_agent.parameters import ParameterConflictError, load_parameter_schema, resolve_parameters
+from jiangnan_agent.parameters import (
+    ParameterConflictError,
+    ParameterSchema,
+    ResolvedParameters,
+    load_parameter_schema,
+    resolve_parameters,
+)
 from jiangnan_agent.generators.hall import HallParameters
 
 
@@ -139,11 +145,24 @@ def test_asset_registry_describes_existing_hall_and_corridor_anchors() -> None:
         "court_east_rear",
     )
     assert assets["corridor"].anchor_interfaces == ("start", "end")
-    assert all(asset.version == 2 and asset.knowledge_base_version == 2 for asset in assets.values())
+    assert all(asset.version == 3 and asset.knowledge_base_version == 3 for asset in assets.values())
     assert all(asset.version == 1 and asset.knowledge_base_version == 1 for asset in legacy_assets.values())
-    assert all(asset.parameter_schema_version == 1 for asset in (*assets.values(), *legacy_assets.values()))
-    with pytest.raises(ValueError, match="unknown asset ID.*version 3"):
-        module_from_asset("hall-future", "jiangnan.hall", asset_version=3)
+    assert all(asset.parameter_schema_version == 2 for asset in assets.values())
+    assert all(asset.parameter_schema_version == 1 for asset in legacy_assets.values())
+    assert {asset.version for asset in list_assets(version=2)} == {1, 2}
+    assert {asset.version for asset in list_assets(version=3)} == {1, 2, 3}
+    assert assets["hall"].region_ids == ("huizhou_core",)
+    assert assets["corridor"].region_ids == ("huizhou_core", "jiangnan_suzhou")
+    assert all(asset.region_association_kind == "design_target" for asset in assets.values())
+    assert all(asset.minecraft_version == "1.21.5" for asset in assets.values())
+    assert assets["hall"].knowledge_rule_ids == ("hui-village-layout-and-architecture",)
+    assert assets["corridor"].knowledge_rule_ids == (
+        "hui-street-building-water-context",
+        "suzhou-garden-elements-context",
+    )
+    assert all("does not validate historical authenticity" in asset.region_association_note for asset in assets.values())
+    with pytest.raises(ValueError, match="unknown asset ID.*version 4"):
+        module_from_asset("hall-future", "jiangnan.hall", asset_version=4)
 
 
 def test_parameter_schema_marks_independent_derived_hard_and_soft_rules() -> None:
@@ -155,6 +174,144 @@ def test_parameter_schema_marks_independent_derived_hard_and_soft_rules() -> Non
     assert {"plinth_width", "bounds_width"} <= set(schema.derived_fields)
     assert schema.hard_constraints[0]["validator"] == "HallParameters"
     assert schema.soft_constraints[0]["rule_id"] == "hall-front-window-width"
+    assert schema.version == 2
+    assert set(schema.provenance_categories) == {
+        "user_input",
+        "literature_reference",
+        "survey_data",
+        "derived",
+        "minecraft_adaptation",
+    }
+    assert set(schema.field_provenance) == set(schema.independent_fields)
+    assert schema.field_provenance["bay_count"]["default_category"] == "minecraft_adaptation"
+    assert schema.field_provenance["bay_count"]["source_ids"] == ("generator.hall.v1",)
+
+
+def test_current_assets_bind_to_their_declared_schema_versions() -> None:
+    for asset in list_assets():
+        if asset.version != 3:
+            continue
+        schema = load_parameter_schema(asset.asset_id, asset_version=asset.version)
+        assert schema.schema_id == asset.parameter_schema_id
+        assert schema.version == asset.parameter_schema_version == 2
+        assert schema.kind == asset.kind
+
+
+def test_parameter_schema_rejects_malformed_provenance_policy_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jiangnan_agent.parameters import registry as parameter_registry
+
+    schema_dir = tmp_path / "parameters" / "v2"
+    schema_dir.mkdir(parents=True)
+    schema = json.loads(
+        (Path(parameter_registry.__file__).parent / "v2" / "hall.json").read_text(encoding="utf-8")
+    )
+    schema["field_provenance"]["bay_count"] = "invalid policy"
+    (schema_dir / "hall.json").write_text(json.dumps(schema), encoding="utf-8")
+    monkeypatch.setattr(parameter_registry, "__file__", str(tmp_path / "parameters" / "registry.py"))
+
+    with pytest.raises(ValueError, match="field provenance policy.*JSON object"):
+        parameter_registry.load_parameter_schema("jiangnan.hall")
+
+
+def test_parameter_schema_rejects_non_derived_provenance_category(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jiangnan_agent.parameters import registry as parameter_registry
+
+    schema_dir = tmp_path / "parameters" / "v2"
+    schema_dir.mkdir(parents=True)
+    schema = json.loads(
+        (Path(parameter_registry.__file__).parent / "v2" / "hall.json").read_text(encoding="utf-8")
+    )
+    schema["derived_provenance"]["category"] = "user_input"
+    (schema_dir / "hall.json").write_text(json.dumps(schema), encoding="utf-8")
+    monkeypatch.setattr(parameter_registry, "__file__", str(tmp_path / "parameters" / "registry.py"))
+
+    with pytest.raises(ValueError, match="derived_provenance must use the derived category"):
+        parameter_registry.load_parameter_schema("jiangnan.hall")
+
+
+def test_parameter_model_constructors_keep_legacy_call_shapes() -> None:
+    loaded = load_parameter_schema("jiangnan.hall", version=1, asset_version=1)
+    schema = ParameterSchema(
+        loaded.schema_id,
+        loaded.version,
+        loaded.asset_id,
+        loaded.kind,
+        loaded.defaults,
+        loaded.independent_fields,
+        loaded.derived_fields,
+        loaded.generator_fields,
+        loaded.adapter_fields,
+        loaded.legacy_aliases,
+        loaded.hard_constraints,
+        loaded.soft_constraints,
+    )
+    resolved = resolve_parameters("jiangnan.hall", asset_version=1)
+    legacy_result = ResolvedParameters(
+        resolved.asset_id,
+        resolved.schema_version,
+        resolved.normalized_inputs,
+        resolved.derived_parameters,
+        resolved.generator_parameters,
+        resolved.adapter_options,
+        resolved.warnings,
+    )
+
+    assert schema.field_provenance["bay_count"]["default_category"] == "minecraft_adaptation"
+    assert not legacy_result.parameter_provenance
+    assert not legacy_result.derived_provenance
+
+
+def test_parameter_resolution_separates_user_defaults_and_derived_values() -> None:
+    resolved = resolve_parameters("jiangnan.hall", {"bay_count": 5})
+
+    assert resolved.parameter_provenance["bay_count"]["category"] == "user_input"
+    assert resolved.parameter_provenance["bay_spacing"]["category"] == "minecraft_adaptation"
+    assert resolved.parameter_provenance["bay_spacing"]["source_ids"] == ("generator.hall.v1",)
+    assert resolved.derived_provenance["plinth_width"]["category"] == "derived"
+    assert resolved.derived_provenance["plinth_width"]["expression"] == "bay_count * bay_spacing + 1"
+    assert resolved.derived_provenance["plinth_width"]["source_ids"] == ("resolver.parameters.v2",)
+
+
+def test_parameter_source_overrides_must_be_allowed_and_cited() -> None:
+    with pytest.raises(ValueError, match="not an accepted provenance category"):
+        resolve_parameters(
+            "jiangnan.hall",
+            {"bay_count": 5},
+            provenance={
+                "bay_count": {
+                    "category": "literature_reference",
+                    "source_id": "unesco.xidi-hongcun.ouval",
+                    "rule_id": "hui-village-layout-and-architecture",
+                }
+            },
+        )
+    with pytest.raises(ValueError, match="unsupported provenance category"):
+        resolve_parameters("jiangnan.hall", {"bay_count": 5}, provenance={"bay_count": {"category": "guess"}})
+    with pytest.raises(ValueError, match="not an accepted provenance category"):
+        resolve_parameters("jiangnan.corridor", {"length": 15}, provenance={"length": {"category": "survey_data"}})
+
+
+def test_parameter_provenance_is_recorded_through_module_edit_and_save(tmp_path: Path) -> None:
+    module = module_from_asset("hall-main", "jiangnan.hall", {"bay_count": 3})
+    assert module.metadata["parameter_provenance"]["bay_count"]["category"] == "user_input"
+    assert module.metadata["parameter_provenance"]["bay_spacing"]["category"] == "minecraft_adaptation"
+    assert module.metadata["derived_provenance"]["plinth_width"]["category"] == "derived"
+
+    project = JiangnanProject(name="Provenance hall", assembly=Assembly((module,)))
+    ProjectEditor(project).regenerate_module("hall-main", {"bay_count": 5}, "Resize hall")
+    destination = tmp_path / "provenance.jap.json"
+    save_project(project, destination)
+    reopened = load_project(destination)
+    edited = reopened.assembly.modules["hall-main"]
+    assert edited.metadata["asset_version"] == 3
+    assert edited.metadata["parameter_provenance"]["bay_count"]["category"] == "user_input"
+    assert edited.metadata["parameter_provenance"]["bay_spacing"]["category"] == "minecraft_adaptation"
+    assert edited.metadata["parameter_provenance"]["bay_spacing"]["source_ids"] == ("generator.hall.v1",)
+    assert edited.metadata["derived_provenance"]["plinth_width"]["category"] == "derived"
 
 
 def test_hall_schema_defaults_match_existing_generator_defaults() -> None:
@@ -187,7 +344,7 @@ def test_hall_parameters_resolve_to_existing_generator_and_derived_footprint() -
     assert resolved.derived_parameters["plinth_depth"] == 7
     assert resolved.derived_parameters["bounds_width"] == 33
     assert resolved.derived_parameters["bounds_depth"] == 9
-    assert resolved.schema_version == 1
+    assert resolved.schema_version == 2
 
 
 def test_corridor_derived_grid_matches_existing_post_placement_rule() -> None:
@@ -217,7 +374,7 @@ def test_hard_constraints_unknown_fields_and_versions_are_rejected() -> None:
     with pytest.raises(ValueError, match="building_type"):
         resolve_parameters("jiangnan.hall", {"building_type": "corridor"})
     with pytest.raises(ValueError, match="unsupported.*schema version"):
-        resolve_parameters("jiangnan.hall", schema_version=2)
+        resolve_parameters("jiangnan.hall", schema_version=3)
     with pytest.raises(ValueError, match="half the hall depth"):
         resolve_parameters("jiangnan.hall", {"roof_section": {"rise": 3}, "depth": 5})
     with pytest.raises(ValueError, match="odd for a centered roof ridge"):
@@ -242,18 +399,30 @@ def test_asset_modules_are_deterministic_and_record_catalog_versions() -> None:
     first = module_from_asset("hall-main", "jiangnan.hall", {"bay_count": 5})
     second = module_from_asset("hall-main", "jiangnan.hall", {"bay_count": 5})
     legacy = module_from_asset("hall-legacy", "jiangnan.hall", {"bay_count": 5}, asset_version=1)
+    asset_two = module_from_asset("hall-v2", "jiangnan.hall", {"bay_count": 5}, asset_version=2)
 
     assert first.model.blocks == second.model.blocks
     assert first.model.blocks == legacy.model.blocks
     assert first.parameters == second.parameters
     assert first.metadata["asset_id"] == "jiangnan.hall"
-    assert first.metadata["asset_version"] == 2
-    assert first.metadata["knowledge_base_version"] == 2
+    assert first.metadata["asset_version"] == 3
+    assert first.metadata["knowledge_base_version"] == 3
     assert legacy.metadata["asset_version"] == 1
     assert legacy.metadata["knowledge_base_version"] == 1
-    assert first.metadata["parameter_schema_version"] == 1
+    assert first.metadata["parameter_schema_version"] == 2
     assert first.metadata["parameter_config"]["bay_count"] == 5
     assert first.model.bounds.size == (28, 10, 9)
+    assert first.metadata["minecraft_version"] == "1.21.5"
+    assert first.metadata["region_ids"] == ("huizhou_core",)
+    assert first.metadata["region_association_kind"] == "design_target"
+    assert "does not validate historical authenticity" in first.metadata["region_association_note"]
+    assert first.metadata["knowledge_context_rule_ids"] == ("hui-village-layout-and-architecture",)
+    assert asset_two.model.blocks == legacy.model.blocks
+    assert asset_two.model.blocks == first.model.blocks
+    assert asset_two.metadata["asset_version"] == 2
+    assert asset_two.metadata["knowledge_base_version"] == 2
+    assert "parameter_provenance" not in asset_two.metadata
+    assert "region_ids" not in asset_two.metadata
 
 
 def test_editing_an_asset_v1_module_keeps_its_recorded_knowledge_version() -> None:
@@ -274,19 +443,19 @@ def test_metadata_survives_serialization_transforms_and_versioned_edits(tmp_path
     moved = rotate_module(translate_module(module, (12, 0, -4)), 1)
     loaded_assembly = assembly_from_dict(assembly_to_dict(Assembly((moved,))))
     loaded = loaded_assembly.modules["hall-main"]
-    assert loaded.metadata["parameter_schema_version"] == 1
+    assert loaded.metadata["parameter_schema_version"] == 2
 
     project = JiangnanProject(name="Versioned hall", assembly=loaded_assembly)
     ProjectEditor(project).regenerate_module("hall-main", {"bay_count": 5}, "Set five bays")
     regenerated = project.assembly.modules["hall-main"]
     assert regenerated.metadata["asset_id"] == "jiangnan.hall"
-    assert regenerated.metadata["parameter_schema_version"] == 1
+    assert regenerated.metadata["parameter_schema_version"] == 2
     assert regenerated.metadata["parameter_config"]["bay_count"] == 5
     assert regenerated.transform_steps == loaded.transform_steps
     destination = tmp_path / "versioned-hall.jap.json"
     save_project(project, destination)
     reopened = load_project(destination)
-    assert reopened.assembly.modules["hall-main"].metadata["asset_version"] == 2
+    assert reopened.assembly.modules["hall-main"].metadata["asset_version"] == 3
     assert reopened.assembly.modules["hall-main"].metadata["parameter_config"]["bay_count"] == 5
 
 
@@ -337,14 +506,54 @@ def test_asset_registry_rejects_unregistered_provenance_source(tmp_path: Path, m
         registry.list_assets.cache_clear()
 
 
+def test_asset_registry_rejects_unknown_region_rule_and_catalog_version_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jiangnan_agent.assets import registry
+
+    catalog_dir = tmp_path / "assets" / "v3"
+    catalog_dir.mkdir(parents=True)
+    catalog = json.loads((Path(registry.__file__).parent / "v3" / "assets.json").read_text(encoding="utf-8"))
+    catalog["assets"][-2]["knowledge_rule_ids"] = ["missing.rule"]
+    (catalog_dir / "assets.json").write_text(json.dumps(catalog), encoding="utf-8")
+    monkeypatch.setattr(registry, "__file__", str(tmp_path / "assets" / "registry.py"))
+    registry.list_assets.cache_clear()
+
+    try:
+        with pytest.raises(ValueError, match="unknown or inactive knowledge rule"):
+            registry.list_assets()
+    finally:
+        registry.list_assets.cache_clear()
+
+
+def test_v3_asset_generator_source_must_be_project_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jiangnan_agent.assets import registry
+
+    catalog_dir = tmp_path / "assets" / "v3"
+    catalog_dir.mkdir(parents=True)
+    catalog = json.loads((Path(registry.__file__).parent / "v3" / "assets.json").read_text(encoding="utf-8"))
+    catalog["assets"][-2]["source_id"] = "unesco.xidi-hongcun.ouval"
+    (catalog_dir / "assets.json").write_text(json.dumps(catalog), encoding="utf-8")
+    monkeypatch.setattr(registry, "__file__", str(tmp_path / "assets" / "registry.py"))
+    registry.list_assets.cache_clear()
+
+    try:
+        with pytest.raises(ValueError, match="must cite its generator source code"):
+            registry.list_assets()
+    finally:
+        registry.list_assets.cache_clear()
+
+
 def test_parameter_schema_must_match_registered_asset_kind_and_schema_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from jiangnan_agent.parameters import registry
 
-    schema_dir = tmp_path / "parameters" / "v1"
+    schema_dir = tmp_path / "parameters" / "v2"
     schema_dir.mkdir(parents=True)
-    schema = json.loads((Path(registry.__file__).parent / "v1" / "hall.json").read_text(encoding="utf-8"))
+    schema = json.loads((Path(registry.__file__).parent / "v2" / "hall.json").read_text(encoding="utf-8"))
     schema["kind"] = "corridor"
     schema["schema_id"] = "corridor"
     (schema_dir / "hall.json").write_text(json.dumps(schema), encoding="utf-8")

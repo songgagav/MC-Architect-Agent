@@ -134,6 +134,7 @@ class ProjectEditor:
         try:
             asset_id = current.metadata.get("asset_id")
             parameter_config = current.metadata.get("parameter_config")
+            parameter_provenance = current.metadata.get("parameter_provenance")
             schema_version = current.metadata.get("parameter_schema_version")
             asset_version = current.metadata.get("asset_version")
             if isinstance(asset_id, str) and isinstance(parameter_config, Mapping):
@@ -148,6 +149,7 @@ class ProjectEditor:
                     schema_version=schema_version,
                     asset_version=asset_version,
                     base_config=parameter_config,
+                    base_provenance=parameter_provenance,
                 )
             else:
                 parameters = dict(current.parameters)

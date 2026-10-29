@@ -21,8 +21,8 @@ Knowledge Base v3 将来源、规则和地域配置分别保存到 `jiangnan_age
 | --- | --- | --- | --- |
 | `unesco.xidi-hongcun.ouval` — [UNESCO：皖南古村落－西递、宏村](https://whc.unesco.org/en/list/1002/) | 官方页面全文已核查；定位为 Description（中文）及 Outstanding Universal Value > Brief synthesis（英文） | 名录对西递、宏村的位置、村落格局、景观、建筑、装饰和水系的描述 | 推广为所有徽州住宅的规则；历史开间、柱网、进深、柱高或屋面尺寸 |
 | `unesco.suzhou-gardens.ouval` — [UNESCO：苏州古典园林](https://whc.unesco.org/en/list/813/) | 官方页面全文已核查；定位为 Description（中文）及 Outstanding Universal Value > Brief synthesis（英文） | 名录对苏州古典园林、缩景设计及水、石、植物和建筑等园林元素的描述 | 推广为所有江南住宅/园林的统一布局、构造做法或比例 |
-| `huangshan.gazette.hui-residence-elements.2021` — [黄山市政府：徽州宅居要素](https://www.huangshan.gov.cn/zjhs/rwhz/hpjz/8294057.html) | 仅元数据可见；本次未取回正文和章节定位；相关 v3 规则为 `pending_verification` | 仅保留待核查任务 | v3 默认查询、参数默认值、生成器规则和历史标准 |
-| `huangshan.gazette.hui-residence.2019` — [黄山市政府：徽州宅居](https://www.huangshan.gov.cn/zjhs/rwhz/fsmq/8294878.html) | 仅元数据可见；本次未取回正文和章节定位 | 来源目录记录 | 未核实的正文摘要或任何尺寸标准 |
+| `huangshan.gazette.hui-residence-elements` — [黄山市政府：徽州宅居要素](https://www.huangshan.gov.cn/zjhs/rwhz/hpjz/8294057.html) | 仅元数据可见；本次未取回正文和章节定位；相关 v3 规则为 `pending_verification` | 仅保留待核查任务 | v3 默认查询、参数默认值、生成器规则和历史标准 |
+| `huangshan.gazette.hui-residence` — [黄山市政府：徽州宅居](https://www.huangshan.gov.cn/zjhs/rwhz/fsmq/8294878.html) | 仅元数据可见；本次未取回正文和章节定位 | 来源目录记录 | 未核实的正文摘要或任何尺寸标准 |
 | `suzhou.garden-admin.architecture` — [苏州市园林和绿化管理局：建筑](https://ylj.suzhou.gov.cn/szsylj/ylys/201903/484421d38f504f5787a8f307925e3ad7.shtml) | 页面正文未成功取回；仅列为来源入口，不关联活动规则 | 后续全文核查入口 | 建筑形式、构造或尺寸结论 |
 
 UNESCO 页面未给出页面出版日期，因此来源记录把 `publication_date` 留空，并在 `date_note` 中记录页面所列的遗产列入年份。章节定位、核查等级、访问日期均在 JSON 来源记录中。地方网页未核实的日期不会从搜索摘要推定。
@@ -46,6 +46,7 @@ UNESCO 页面未给出页面出版日期，因此来源记录把 `publication_da
 
 - 生成器规则标记为 `minecraft_adaptation`，描述当前 Python 生成行为，不是传统建筑事实。
 - 用户偏好（如自由组合模块）标记为 `user_preference`，不是文献证据。
+- 参数来源类别包括 `user_input`、`literature_reference`、`survey_data`、`derived` 和 `minecraft_adaptation`。当前 hall/corridor schema 的独立输入只接受用户输入或当前生成器适配；没有可核实的测绘尺寸，也没有能支撑开间、柱高或屋面参数的活动文献规则，所以这些字段目前不接受 `literature_reference` 或 `survey_data` 覆盖。
 - `E:\MCbuild\Template` 中两个 Litematica 文件只作视觉参考，摘要用于识别本地原件；不据此推断年代、地域真实性或营造标准。
 - 用户输入、测绘数据、派生值和 Minecraft 游戏适配参数在参数注册表中分开记录。当前生成器默认值是可复现的 Minecraft 设计输入，不得描述为历史测绘数据。
 
