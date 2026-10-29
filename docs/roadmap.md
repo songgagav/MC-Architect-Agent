@@ -24,6 +24,8 @@
 
 建立版本化 `JiangnanProject` JSON，保存完整组合、对象 ID、模块参数和连接关系；记录方块级差异与不可变版本快照，支持撤销/重做。按模块 ID 只重生成目标厅堂或直廊，保留其他模块数据；尺寸变化造成的连接错位交由 Phase 3 校验器报告。**实现与自动化验收完成；游戏内长期编辑与外观验证待进行。**
 
+当前 `generate` 来源规则：Assembly 非空时优先验证并导出 Assembly，即使 `settings.building` 同时存在也不参与生成；Assembly 验证/渲染失败时报错且不回退。Assembly 为空时使用旧生成设置。未来可增加 `source="auto" | "assembly" | "legacy"`，其中 `auto` 延续当前规则；现阶段不实现该参数。
+
 ### Phase 5 — 接入 GPT-6 Agent
 
 在模块引擎稳定后研究 OpenAI Agents SDK。第一版使用单一总控 Agent；模型输出结构化决策和工具参数，由本地工具生成方块。

@@ -41,11 +41,19 @@ jiangnan redo workspace\projects\suzhou-hall.jap.json
 Python API 可按模块 ID 重新生成厅堂或直廊，记录方块差异，并在工程中保留撤销/重做快照：
 
 ```python
-from jiangnan_agent.io import ProjectEditor, load_project, save_project
+from pathlib import Path
 
-project = load_project("workspace/projects/suzhou-hall.jap.json")
+from jiangnan_agent.assembly import Assembly, hall_module
+from jiangnan_agent.io import JiangnanProject, ProjectEditor, save_project
+
+project_path = Path("workspace/projects/editable-hall.jap.json")
+project = JiangnanProject(
+    name="Editable hall",
+    assembly=Assembly((hall_module("hall-main"),)),
+)
+save_project(project, project_path)
 ProjectEditor(project).regenerate_module("hall-main", {"bay_count": 5}, "调整为五开间")
-save_project(project, "workspace/projects/suzhou-hall.jap.json")
+save_project(project, project_path)
 ```
 
 ## 生成建筑
@@ -56,7 +64,13 @@ jiangnan generate --project workspace\projects\suzhou-hall.jap.json
 
 默认生成到 `workspace\exports` 下的安全文件名 `.schem`。`simple_house` 可调整 `width`、`length`、`wall_height`、`roof_overhang` 和方块材料。`.schem` 为 Sponge v3 gzip-NBT，可使用 WorldEdit 导入测试世界。不要让生成器直接写入已有 Minecraft 存档。
 
-当工程中存在 Assembly 模块时，`generate` 会先验证并导出当前模块组合；Assembly 为空的旧工程继续按 `settings.building` 生成单体房屋或厅堂。
+当前生成来源规则：
+
+- Assembly 非空时，先验证并导出当前模块组合。即使工程还带有 `settings.building`，也只使用 Assembly。
+- Assembly 验证或渲染失败时直接报告错误，不回退到旧设置。
+- Assembly 为空时，继续按 `settings.building` 生成单体房屋或厅堂。
+
+未来可以增加 `source="auto" | "assembly" | "legacy"` 显式选择；目前尚未实现该参数，`auto` 的预期行为与以上规则一致。
 
 仓库内的示例工程：
 

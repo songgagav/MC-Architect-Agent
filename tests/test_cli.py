@@ -38,7 +38,7 @@ def test_init_creates_and_validates_project(tmp_path: Path) -> None:
     assert "Sample Hall" in validated.stdout
 
 
-def test_generate_writes_readable_sponge_schematic(tmp_path: Path) -> None:
+def test_generate_with_empty_assembly_uses_legacy_building_settings(tmp_path: Path) -> None:
     project_path = tmp_path / "sample.jap.json"
     schematic_path = tmp_path / "sample.schem"
     created = run_cli("init", "--name", "Sample Hall", "--output", str(project_path))
@@ -82,7 +82,7 @@ def test_generate_hall_writes_readable_schematic(tmp_path: Path) -> None:
     assert schematic.model.blocks == normalized_expected.blocks
 
 
-def test_generate_exports_saved_assembly_instead_of_legacy_building_settings(tmp_path: Path) -> None:
+def test_generate_prefers_nonempty_assembly_when_legacy_settings_also_exist(tmp_path: Path) -> None:
     project_path = tmp_path / "assembly.jap.json"
     schematic_path = tmp_path / "assembly.schem"
     model = VoxelModel()
@@ -99,6 +99,27 @@ def test_generate_exports_saved_assembly_instead_of_legacy_building_settings(tmp
     assert generated.returncode == 0, generated.stderr
     schematic = read_schematic(schematic_path)
     assert schematic.model.blocks == {(0, 0, 0): next(iter(model.blocks.values()))}
+
+
+def test_generate_does_not_fall_back_when_assembly_validation_fails(tmp_path: Path) -> None:
+    project_path = tmp_path / "invalid-assembly.jap.json"
+    schematic_path = tmp_path / "must-not-exist.schem"
+    first_model = VoxelModel()
+    second_model = VoxelModel()
+    first_model.set_block((0, 0, 0), "minecraft:gold_block")
+    second_model.set_block((0, 0, 0), "minecraft:stone")
+    project = JiangnanProject(
+        name="Invalid assembly",
+        settings={"building": {"type": "simple_house", "width": 9}},
+        assembly=Assembly((Module("first", "custom", first_model), Module("second", "custom", second_model))),
+    )
+    save_project(project, project_path)
+
+    generated = run_cli("generate", "--project", str(project_path), "--output", str(schematic_path))
+
+    assert generated.returncode != 0
+    assert "assembly validation failed" in generated.stderr
+    assert not schematic_path.exists()
 
 
 def test_history_lists_revisions_and_affected_modules(tmp_path: Path) -> None:
