@@ -12,9 +12,11 @@ dependencies = ["nbtlib>=2.0.4,<3"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<9"]
+mcp = ["mcp>=1.26,<2"]
 
 [project.scripts]
 jiangnan = "jiangnan_agent.cli:main"
+jiangnan-mcp = "jiangnan_agent.agent_tools.mcp_server:main"
 
 [tool.setuptools.packages.find]
 include = ["jiangnan_agent*"]
