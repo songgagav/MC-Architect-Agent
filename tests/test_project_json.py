@@ -6,6 +6,7 @@ from jiangnan_agent.assembly.model import Assembly, ClearanceZone, Connection, C
 from jiangnan_agent.core.geometry import BoundingBox
 from jiangnan_agent.core.scene import VoxelModel
 from jiangnan_agent.io.assembly_json import assembly_from_dict, assembly_to_dict
+from jiangnan_agent.io.project_history import ProjectRevision
 from jiangnan_agent.io.project_json import JiangnanProject, load_project, save_project
 
 
@@ -24,6 +25,8 @@ def test_project_save_and_load_preserves_modules_and_settings(tmp_path) -> None:
 
     assert loaded.to_dict() == project.to_dict()
     assert loaded.assembly.modules["hall-1"].model.block_at((-4, 2, 9)).block_id == "minecraft:oak_stairs"
+    assert loaded.revision_cursor == 0
+    assert len(loaded.revision_history) == 1
 
 
 def test_project_rejects_unknown_format_version() -> None:
@@ -97,3 +100,28 @@ def test_project_format_one_migrates_without_losing_existing_fields() -> None:
 def test_project_format_two_rejects_malformed_assembly() -> None:
     with pytest.raises(ValueError, match="assembly"):
         JiangnanProject.from_dict({"name": "bad", "format_version": 2, "assembly": {"modules": "invalid"}})
+
+
+def test_project_save_and_load_preserves_revision_history_and_cursor(tmp_path) -> None:
+    initial = make_persistable_assembly()
+    changed_model = VoxelModel()
+    changed_model.set_block((-4, 2, 9), "minecraft:oak_stairs[facing=east,shape=outer_left,half=top]")
+    changed_model.set_block((-3, 2, 9), "minecraft:spruce_door[facing=south,half=upper,hinge=left,open=false,powered=false]")
+    changed_model.set_block((0, 0, 0), "minecraft:stone")
+    changed_hall = Module("hall-1", "hall", changed_model)
+    changed = Assembly((changed_hall, initial.modules["corridor-1"]), initial.connections)
+    base_revision = ProjectRevision.create(0, None, "Initial", (), initial)
+    edited_revision = ProjectRevision.create(1, 0, "Add a block", ("hall-1",), changed)
+    project = JiangnanProject(
+        name="History project",
+        assembly=changed,
+        revision_history=[base_revision, edited_revision],
+        revision_cursor=1,
+    )
+    path = tmp_path / "history.jap.json"
+
+    save_project(project, path)
+    loaded = load_project(path)
+
+    assert loaded.to_dict() == project.to_dict()
+    assert loaded.revision_history[0].restore_assembly().modules["hall-1"].model.blocks == initial.modules["hall-1"].model.blocks

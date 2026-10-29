@@ -79,10 +79,11 @@
 - `ProjectRevision` stores revision/parent IDs, timestamp, message, changed module IDs, block changes, and a serialized snapshot.
 - Projects start with revision 0; `to_dict()` persists all history and the selected revision; loading restores the selected snapshot.
 
-- [ ] **Step 1: Write failing tests** for initial revision creation, exact additions/removals/state changes, snapshot isolation from mutable models, and history round-trip.
-- [ ] **Step 2: Run** `pytest tests/test_project_history.py tests/test_project_json.py -q`; confirm the revision APIs are absent.
-- [ ] **Step 3: Implement** immutable snapshot encoding, revision records, and project history serialization/validation.
-- [ ] **Step 4: Re-run** focused tests and `pytest -q`.
+- [x] **Step 1: Write failing tests** for initial revision creation, exact additions/removals/state changes, snapshot isolation from mutable models, and history round-trip.
+- [x] **Step 2: Run** `pytest tests/test_project_history.py tests/test_project_json.py -q`; confirm the revision APIs are absent.
+- [x] **Step 3: Implement** immutable snapshot encoding, revision records, and project history serialization/validation.
+- [x] **Step 4: Re-run** focused tests and `pytest -q`.
+- [x] **Step 5: Commit** Task 3 as `feat: add project revision snapshots`.
 
 ### Task 4: Implement Module-Scoped Edit, Regeneration, Undo, and Redo
 

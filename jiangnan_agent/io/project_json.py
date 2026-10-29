@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from ..assembly.model import Assembly
 from .assembly_json import assembly_from_dict, assembly_to_dict
+from .project_history import ProjectRevision
 
 PROJECT_FORMAT_VERSION = 2
 LEGACY_PROJECT_FORMAT_VERSION = 1
@@ -29,6 +30,8 @@ class JiangnanProject:
     settings: dict[str, Any] = field(default_factory=dict)
     format_version: int = PROJECT_FORMAT_VERSION
     assembly: Assembly = field(default_factory=Assembly)
+    revision_history: list[ProjectRevision] = field(default_factory=list)
+    revision_cursor: int = 0
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
@@ -43,8 +46,30 @@ class JiangnanProject:
             raise ValueError("settings must be a JSON object")
         if not isinstance(self.assembly, Assembly):
             raise ValueError("assembly must be an Assembly")
+        if not isinstance(self.revision_history, list) or any(
+            not isinstance(revision, ProjectRevision) for revision in self.revision_history
+        ):
+            raise ValueError("revision_history must be a list of ProjectRevision values")
+        if not self.revision_history:
+            self.revision_history = [ProjectRevision.create(0, None, "Initial project state", (), self.assembly)]
+            self.revision_cursor = 0
+        if (
+            isinstance(self.revision_cursor, bool)
+            or not isinstance(self.revision_cursor, int)
+            or not 0 <= self.revision_cursor < len(self.revision_history)
+        ):
+            raise ValueError("revision_cursor must select an existing revision")
+        previous_id: int | None = None
+        for index, revision in enumerate(self.revision_history):
+            if revision.parent_revision_id != previous_id:
+                raise ValueError(f"revision {index} has an invalid parent link")
+            previous_id = revision.revision_id
+        if assembly_to_dict(self.revision_history[self.revision_cursor].restore_assembly()) != assembly_to_dict(self.assembly):
+            raise ValueError("current assembly does not match the selected revision snapshot")
 
     def to_dict(self) -> dict[str, Any]:
+        if assembly_to_dict(self.revision_history[self.revision_cursor].restore_assembly()) != assembly_to_dict(self.assembly):
+            raise ValueError("current assembly does not match the selected revision snapshot")
         return {
             "format_version": self.format_version,
             "project_id": self.project_id,
@@ -54,6 +79,8 @@ class JiangnanProject:
             "modules": self.modules,
             "settings": self.settings,
             "assembly": assembly_to_dict(self.assembly),
+            "revision_history": [revision.to_dict() for revision in self.revision_history],
+            "revision_cursor": self.revision_cursor,
         }
 
     @classmethod
@@ -74,6 +101,11 @@ class JiangnanProject:
             )
             if source_version == PROJECT_FORMAT_VERSION and "assembly" not in data:
                 raise ValueError("project JSON is missing required field: assembly")
+            raw_history = data.get("revision_history", [])
+            if not isinstance(raw_history, (list, tuple)):
+                raise ValueError("revision_history must be a list")
+            revision_history = [ProjectRevision.from_dict(item) for item in raw_history]
+            revision_cursor = data.get("revision_cursor", max(0, len(revision_history) - 1))
             return cls(
                 name=str(data["name"]),
                 project_id=str(data.get("project_id") or uuid4()),
@@ -83,6 +115,8 @@ class JiangnanProject:
                 settings=data.get("settings", {}),
                 format_version=PROJECT_FORMAT_VERSION,
                 assembly=assembly,
+                revision_history=revision_history,
+                revision_cursor=revision_cursor,
             )
         except (TypeError, ValueError) as exc:
             raise ValueError(f"invalid project JSON: {exc}") from exc
