@@ -26,9 +26,9 @@
 
 当前 `generate` 来源规则：Assembly 非空时优先验证并导出 Assembly，即使 `settings.building` 同时存在也不参与生成；Assembly 验证/渲染失败时报错且不回退。Assembly 为空时使用旧生成设置。未来可增加 `source="auto" | "assembly" | "legacy"`，其中 `auto` 延续当前规则；现阶段不实现该参数。
 
-### Phase 5 — 接入 GPT-6 Agent
+### Phase 5 — Codex 本地建筑工具接入
 
-在模块引擎稳定后研究 OpenAI Agents SDK。第一版使用单一总控 Agent；模型输出结构化决策和工具参数，由本地工具生成方块。
+由当前 Codex 通过本机 MCP stdio 服务调用 Python 建筑引擎。工具覆盖工程和模块读取、厅堂/直廊创建、参数修改、模块变换与连接、工程校验、历史差异检查和 `.schem` 导出。模型只选择结构化参数，方块由本地程序生成；不调用模型 API，也不要求 Agents SDK。**实现、自动化验收及 Codex 自然语言闭环验收完成。Minecraft/WorldEdit 实机放置仍待人工验证。**
 
 ### Phase 6 — 三维预览与视觉审核
 
@@ -54,11 +54,12 @@
 
 | 工具组 | 典型工具 | 职责 |
 | --- | --- | --- |
-| 模块管理 | `list_modules`, `create_module`, `get_module` | 查找、创建、读取模块 |
-| 建筑设计 | `generate_building`, `set_parameters` | 创建和调整建筑 |
-| 组合装配 | `connect_modules`, `rotate_module`, `replace_module` | 对齐、组合、替换 |
-| 质量检查 | `validate_assembly`, `inspect_changes` | 检查结构、冲突和变更 |
-| 工程交付 | `save_project`, `render_preview`, `export_schematic` | 保存、渲染、导出 |
+| 工程与模块 | `list_projects`, `get_project`, `create_project`, `list_modules`, `get_module`, `create_module` | 查找、创建和读取工程模块 |
+| 参数与装配 | `set_parameters`, `transform_module`, `connect_modules`, `replace_module` | 生成、调整和组合厅堂/直廊 |
+| 质量检查 | `validate_assembly`, `inspect_changes` | 检查冲突并读取有界版本差异 |
+| 工程交付 | `export_schematic` | 校验并导出 Sponge v3 文件 |
+
+首版 MCP 工具名以项目 README 与服务注册表为准。版本撤销和重做继续由现有 `jiangnan history/undo/redo` CLI 提供；三维预览属于 Phase 6。
 
 ## 质量要求
 

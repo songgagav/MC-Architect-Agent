@@ -199,6 +199,26 @@ def test_connect_new_module_records_aligned_module_and_connection() -> None:
     assert len(project.assembly.connections) == 1
 
 
+def test_connect_new_module_only_marks_endpoints_of_the_new_connection() -> None:
+    parameters = CorridorParameters(length=9, width=5)
+    first = corridor_module("existing-a", parameters, passage_width=2)
+    second = corridor_module("existing-b", parameters, passage_width=2)
+    start = first.anchor("end").position
+    end = second.anchor("start").position
+    offset = tuple(left - right for left, right in zip(start, end))
+    second = translate_module(second, offset)
+    isolated = corridor_module("isolated", parameters, passage_width=2)
+    project = JiangnanProject(name="Unrelated connections", assembly=Assembly((first, second, isolated)))
+    editor = ProjectEditor(project)
+    editor.connect_modules("existing-a", "end", "existing-b", "start", "Connect existing pair")
+
+    attached = corridor_module("attached", parameters, passage_width=2)
+    revision = editor.connect_modules("isolated", "end", attached, "start", "Attach new corridor")
+
+    assert revision.changed_module_ids == ("attached", "isolated")
+    assert {change.module_id for change in revision.block_changes} == {"attached"}
+
+
 def test_transform_module_records_exact_delta() -> None:
     project = JiangnanProject(name="Move hall", assembly=Assembly((hall_module("hall-main"),)))
     editor = ProjectEditor(project)

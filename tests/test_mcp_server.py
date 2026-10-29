@@ -11,11 +11,9 @@ import pytest
 
 
 def test_mcp_stdio_lists_strict_tools_and_creates_a_project_module(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    try:
-        from mcp.client.session import ClientSession
-        from mcp.client.stdio import StdioServerParameters, stdio_client
-    except ImportError as exc:
-        pytest.fail(f"the optional MCP SDK must be installed to run the protocol test: {exc}", pytrace=False)
+    pytest.importorskip("mcp", reason="install the optional [mcp] extra to run the protocol test")
+    from mcp.client.session import ClientSession
+    from mcp.client.stdio import StdioServerParameters, stdio_client
 
     async def exercise_server() -> None:
         repository_root = Path(__file__).resolve().parents[1]

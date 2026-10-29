@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier, local
 
 import pytest
 
@@ -11,6 +14,7 @@ from jiangnan_agent.io.project_generation import generate_project_model
 from jiangnan_agent.io.project_json import JiangnanProject, load_project, save_project
 from jiangnan_agent.io.schematic import read_schematic
 from jiangnan_agent.agent_tools.service import ProjectToolService
+from jiangnan_agent.agent_tools.project_access import ProjectAccess
 
 
 def make_service(tmp_path: Path) -> ProjectToolService:
@@ -181,6 +185,72 @@ def test_create_and_export_refuse_existing_files(tmp_path: Path) -> None:
 
     assert project_path.read_bytes() == original_project
     assert export_path.read_bytes() == b"keep this export"
+
+
+def _synchronize_second_path_check(monkeypatch: pytest.MonkeyPatch, method_name: str) -> None:
+    barrier = Barrier(2)
+    thread_state = local()
+    original = getattr(ProjectAccess, method_name)
+
+    def synchronized(access: ProjectAccess, *args: object, **kwargs: object) -> Path:
+        destination = original(access, *args, **kwargs)
+        check_count = getattr(thread_state, "check_count", 0) + 1
+        thread_state.check_count = check_count
+        if check_count == 2:
+            barrier.wait(timeout=5)
+        return destination
+
+    monkeypatch.setattr(ProjectAccess, method_name, synchronized)
+
+
+def _race_result(operation: Callable[[], object]) -> tuple[str, object]:
+    try:
+        return "created", operation()
+    except ValueError as exc:
+        return "refused", str(exc)
+
+
+def test_concurrent_create_project_refuses_the_losing_new_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    service = make_service(tmp_path)
+    _synchronize_second_path_check(monkeypatch, "resolve_project_path")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                lambda name: _race_result(lambda: service.create_project(name, "shared.jap.json")),
+                ("First", "Second"),
+            )
+        )
+
+    assert [status for status, _ in results].count("created") == 1
+    assert [status for status, _ in results].count("refused") == 1
+    saved = load_project(tmp_path / "workspace" / "projects" / "shared.jap.json")
+    assert saved.name in {"First", "Second"}
+
+
+def test_concurrent_schematic_exports_refuse_the_losing_new_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = make_service(tmp_path)
+    service.create_project("Shared output", "project.jap.json")
+    service.create_module("project.jap.json", "hall-main", "hall", {"bay_count": 3})
+    _synchronize_second_path_check(monkeypatch, "resolve_export_path")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                lambda _: _race_result(
+                    lambda: service.export_schematic("project.jap.json", "shared.schem")
+                ),
+                range(2),
+            )
+        )
+
+    assert [status for status, _ in results].count("created") == 1
+    assert [status for status, _ in results].count("refused") == 1
+    schematic = read_schematic(tmp_path / "workspace" / "exports" / "shared.schem")
+    assert len(schematic.model.blocks) == 522
 
 
 def test_export_schematic_does_not_fallback_from_invalid_assembly(tmp_path: Path) -> None:

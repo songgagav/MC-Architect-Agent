@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -197,12 +198,19 @@ def diff_assemblies(before: Assembly, after: Assembly) -> tuple[tuple[str, ...],
         if before_modules.get(module_id) != after_modules.get(module_id)
     }
 
-    before_connections = before_dict["connections"]
-    after_connections = after_dict["connections"]
-    if before_connections != after_connections:
-        for connection in (*before_connections, *after_connections):
-            changed_ids.add(connection["first_module_id"])
-            changed_ids.add(connection["second_module_id"])
+    connection_fields = ("first_module_id", "first_anchor", "second_module_id", "second_anchor")
+    before_connections = Counter(
+        tuple(connection[field] for field in connection_fields)
+        for connection in before_dict["connections"]
+    )
+    after_connections = Counter(
+        tuple(connection[field] for field in connection_fields)
+        for connection in after_dict["connections"]
+    )
+    for connection in before_connections.keys() | after_connections.keys():
+        if before_connections[connection] != after_connections[connection]:
+            changed_ids.add(connection[0])
+            changed_ids.add(connection[2])
 
     changes: list[BlockChange] = []
     for module_id in sorted(before_modules.keys() | after_modules.keys()):

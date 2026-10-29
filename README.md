@@ -18,6 +18,30 @@ python -m pip install -e ".[dev]"
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
+## Codex 本地建筑工具
+
+Phase 5 通过本机 MCP stdio 服务，让当前 Codex 调用 Python 建筑引擎。模型只选择模块和参数；方块生成、工程保存、校验与 `.schem` 导出都在本机执行。本方案不调用模型 API，也不需要 API 密钥。
+
+在 `E:\MCbuild` 的 PowerShell 中安装 MCP 可选依赖并注册服务：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,mcp]"
+codex mcp add jiangnan-architect -- "E:\MCbuild\.venv\Scripts\python.exe" -m jiangnan_agent.agent_tools.mcp_server --workspace-root "E:\MCbuild"
+codex mcp list
+```
+
+注册后重新加载 Codex；如果工具仍未出现，重启 Codex 后再开一个对话。服务只通过标准输入输出与 Codex 通信，不开放网络端口。
+
+首版提供以下工具：
+
+- 工程与模块：`list_projects`、`get_project`、`create_project`、`list_modules`、`get_module`、`create_module`
+- 参数与装配：`set_parameters`、`transform_module`、`connect_modules`、`replace_module`
+- 检查与导出：`validate_assembly`、`inspect_changes`、`export_schematic`
+
+当前生成器支持 `hall` 和 `corridor`。`project_path` 相对于 `workspace/projects`，`output_path` 相对于 `workspace/exports`；工具拒绝越界路径和覆盖已存在的新文件。每次模块修改都会保存为工程历史版本。可用 `inspect_changes` 查看差异，使用 `jiangnan history`、`jiangnan undo` 和 `jiangnan redo` 查看或恢复版本。
+
+工具只在工程目录中读写 JSON，只把 `.schem` 写到 exports 目录；不会删除文件、打开或修改 Minecraft 世界存档。Schematic 请先在独立测试世界中用 WorldEdit 验证。
+
 ## 创建、读取工程
 
 ```powershell

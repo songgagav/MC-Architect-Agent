@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping
+import os
 from pathlib import Path
+import tempfile
 from typing import Any
 
 from ..assembly.adapters import corridor_module, hall_module
@@ -19,6 +21,25 @@ from ..io.project_history import BlockChange, ProjectRevision
 from ..io.project_json import JiangnanProject, load_project, save_project
 from ..io.schematic import read_schematic, write_schematic
 from .project_access import ProjectAccess
+
+
+def _temporary_sibling(destination: Path) -> Path:
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.",
+        suffix=".tmp",
+        dir=destination.parent,
+    )
+    os.close(descriptor)
+    return Path(temporary_name)
+
+
+def _publish_new_file(temporary_path: Path, destination: Path, conflict_message: str) -> None:
+    """Atomically add a completed file without replacing a concurrent winner."""
+
+    try:
+        os.link(temporary_path, destination)
+    except FileExistsError as exc:
+        raise ValueError(conflict_message) from exc
 
 
 class ProjectToolService:
@@ -255,15 +276,24 @@ class ProjectToolService:
         model = generate_project_model(project)
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination = self.access.resolve_export_path(output_path)
-        write_schematic(model, destination, data_version=project.data_version, name=project.name)
-        document = read_schematic(destination)
-        expected_offset = (model.bounds.min_x, model.bounds.min_y, model.bounds.min_z)
-        expected_local_blocks = {
-            (x - expected_offset[0], y - expected_offset[1], z - expected_offset[2]): state
-            for (x, y, z), state in model.blocks.items()
-        }
-        if document.offset != expected_offset or document.model.blocks != expected_local_blocks:
-            raise ValueError("schematic round-trip validation failed")
+        temporary_path = _temporary_sibling(destination)
+        try:
+            write_schematic(model, temporary_path, data_version=project.data_version, name=project.name)
+            document = read_schematic(temporary_path)
+            expected_offset = (model.bounds.min_x, model.bounds.min_y, model.bounds.min_z)
+            expected_local_blocks = {
+                (x - expected_offset[0], y - expected_offset[1], z - expected_offset[2]): state
+                for (x, y, z), state in model.blocks.items()
+            }
+            if document.offset != expected_offset or document.model.blocks != expected_local_blocks:
+                raise ValueError("schematic round-trip validation failed")
+            _publish_new_file(
+                temporary_path,
+                destination,
+                f"schematic output already exists: {output_path!r}",
+            )
+        finally:
+            temporary_path.unlink(missing_ok=True)
         return {
             "operation": "export_schematic",
             "project_path": project_path,
@@ -282,9 +312,19 @@ class ProjectToolService:
         return load_project(destination), destination
 
     def _save_new_project(self, destination: Path, project: JiangnanProject, project_path: str) -> None:
-        # Re-resolve immediately before the atomic writer so new project files are never replaced.
+        # Re-resolve for early feedback; the final hard-link publication also refuses races.
         destination = self.access.resolve_project_path(project_path, operation="create")
-        save_project(project, destination)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = _temporary_sibling(destination)
+        try:
+            save_project(project, temporary_path)
+            _publish_new_file(
+                temporary_path,
+                destination,
+                f"project file already exists: {project_path!r}",
+            )
+        finally:
+            temporary_path.unlink(missing_ok=True)
 
     def _project_summary(self, project_path: str, project: JiangnanProject) -> dict[str, Any]:
         revision = project.revision_history[project.revision_cursor]
