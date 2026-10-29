@@ -60,10 +60,11 @@
 - `assembly_from_dict(data: Mapping[str, Any]) -> Assembly`
 - Version-2 `JiangnanProject` carries the current `assembly`; version-1 documents remain readable. Revision history and cursor are added by Task 3.
 
-- [ ] **Step 1: Write failing tests** for complete assembly round-trip (including negative coordinates and directional states), format-1 migration, malformed assembly rejection, and deterministic key/list ordering.
-- [ ] **Step 2: Run** `pytest tests/test_project_json.py -q`; confirm the missing `assembly`/migration behavior.
-- [ ] **Step 3: Implement** deterministic assembly serializers and version-2 project fields/migration, keeping atomic save behavior.
-- [ ] **Step 4: Re-run** project JSON tests and `pytest -q`.
+- [x] **Step 1: Write failing tests** for complete assembly round-trip (including negative coordinates and directional states), format-1 migration, malformed assembly rejection, and deterministic key/list ordering.
+- [x] **Step 2: Run** `pytest tests/test_project_json.py -q`; confirm the missing `assembly`/migration behavior.
+- [x] **Step 3: Implement** deterministic assembly serializers and version-2 project fields/migration, keeping atomic save behavior.
+- [x] **Step 4: Re-run** project JSON tests and `pytest -q`.
+- [x] **Step 5: Commit** Task 2 as `feat: persist assembly in project files`.
 
 ### Task 3: Add Immutable Revision Snapshots and Exact Block Deltas
 

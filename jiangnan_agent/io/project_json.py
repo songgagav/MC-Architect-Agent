@@ -10,7 +10,11 @@ import tempfile
 from typing import Any
 from uuid import uuid4
 
-PROJECT_FORMAT_VERSION = 1
+from ..assembly.model import Assembly
+from .assembly_json import assembly_from_dict, assembly_to_dict
+
+PROJECT_FORMAT_VERSION = 2
+LEGACY_PROJECT_FORMAT_VERSION = 1
 DEFAULT_MINECRAFT_VERSION = "1.21.5"
 DEFAULT_DATA_VERSION = 4325
 
@@ -24,9 +28,10 @@ class JiangnanProject:
     modules: list[dict[str, Any]] = field(default_factory=list)
     settings: dict[str, Any] = field(default_factory=dict)
     format_version: int = PROJECT_FORMAT_VERSION
+    assembly: Assembly = field(default_factory=Assembly)
 
     def __post_init__(self) -> None:
-        if not self.name.strip():
+        if not isinstance(self.name, str) or not self.name.strip():
             raise ValueError("project name cannot be empty")
         if self.format_version != PROJECT_FORMAT_VERSION:
             raise ValueError(f"unsupported project format version: {self.format_version}")
@@ -36,6 +41,8 @@ class JiangnanProject:
             raise ValueError("modules must be a list of JSON objects")
         if not isinstance(self.settings, dict):
             raise ValueError("settings must be a JSON object")
+        if not isinstance(self.assembly, Assembly):
+            raise ValueError("assembly must be an Assembly")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -46,6 +53,7 @@ class JiangnanProject:
             "data_version": self.data_version,
             "modules": self.modules,
             "settings": self.settings,
+            "assembly": assembly_to_dict(self.assembly),
         }
 
     @classmethod
@@ -56,6 +64,16 @@ class JiangnanProject:
         if missing:
             raise ValueError(f"project JSON is missing required fields: {', '.join(sorted(missing))}")
         try:
+            source_version = int(data.get("format_version", LEGACY_PROJECT_FORMAT_VERSION))
+            if source_version not in (LEGACY_PROJECT_FORMAT_VERSION, PROJECT_FORMAT_VERSION):
+                raise ValueError(f"unsupported project format version: {source_version}")
+            assembly = (
+                assembly_from_dict(data["assembly"])
+                if source_version == PROJECT_FORMAT_VERSION and "assembly" in data
+                else Assembly()
+            )
+            if source_version == PROJECT_FORMAT_VERSION and "assembly" not in data:
+                raise ValueError("project JSON is missing required field: assembly")
             return cls(
                 name=str(data["name"]),
                 project_id=str(data.get("project_id") or uuid4()),
@@ -63,7 +81,8 @@ class JiangnanProject:
                 data_version=int(data.get("data_version", DEFAULT_DATA_VERSION)),
                 modules=data.get("modules", []),
                 settings=data.get("settings", {}),
-                format_version=int(data.get("format_version", PROJECT_FORMAT_VERSION)),
+                format_version=PROJECT_FORMAT_VERSION,
+                assembly=assembly,
             )
         except (TypeError, ValueError) as exc:
             raise ValueError(f"invalid project JSON: {exc}") from exc
@@ -72,7 +91,7 @@ class JiangnanProject:
 def save_project(project: JiangnanProject, path: str | Path) -> Path:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    content = json.dumps(project.to_dict(), ensure_ascii=False, indent=2) + "\n"
+    content = json.dumps(project.to_dict(), ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n"
     temporary_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
