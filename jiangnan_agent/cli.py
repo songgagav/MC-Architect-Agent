@@ -6,11 +6,13 @@ import argparse
 from pathlib import Path
 import re
 import sys
+import json
 
 from .io.project_generation import generate_project_model
 from .io.project_json import JiangnanProject, load_project, save_project
 from .io.project_editor import ProjectEditor
 from .io.schematic import write_schematic
+from .preview import render_schematic_previews
 
 
 def main() -> int:
@@ -41,6 +43,14 @@ def main() -> int:
     generate_parser.add_argument("--project", required=True, type=Path, help="project JSON path")
     generate_parser.add_argument("--output", type=Path, help="output Sponge schematic path")
 
+    preview_parser = subparsers.add_parser("preview", help="render a Sponge schematic with Mine2Blend and Blender")
+    preview_parser.add_argument("--schematic", required=True, type=Path, help="input Sponge .schem file")
+    preview_parser.add_argument("--output-dir", required=True, type=Path, help="new or empty preview directory")
+    preview_parser.add_argument("--mine2blend-root", required=True, type=Path, help="Mine2Blend add-on root directory")
+    preview_parser.add_argument("--blender", required=True, type=Path, help="Blender executable path")
+    preview_parser.add_argument("--compare-before", type=Path, help="optional earlier .schem to render beside the current version")
+    preview_parser.add_argument("--timeout", type=int, default=600, help="per-process timeout in seconds")
+
     args = parser.parse_args()
     try:
         if args.command == "init":
@@ -50,6 +60,23 @@ def main() -> int:
             )
             destination = save_project(project, args.output)
             print(f"已创建工程: {destination.resolve()}")
+            return 0
+
+        if args.command == "preview":
+            result = render_schematic_previews(
+                args.schematic,
+                args.output_dir,
+                mine2blend_root=args.mine2blend_root,
+                blender_executable=args.blender,
+                compare_before=args.compare_before,
+                timeout=args.timeout,
+            )
+            print(json.dumps({
+                "output_dir": str(result.output_dir),
+                "renders": {name: str(path) for name, path in sorted(result.render_paths.items())},
+                "preview_report": str(result.preview_report_path),
+                "comparison_report": str(result.comparison_report_path) if result.comparison_report_path else None,
+            }, ensure_ascii=False, indent=2))
             return 0
 
         project = load_project(args.project)

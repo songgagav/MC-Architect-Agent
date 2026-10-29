@@ -107,6 +107,22 @@ jiangnan generate --project examples\three_bay_hall.jap.json
 
 `hall` 工程可调 `bay_count`（奇数开间）、`bay_width`、`depth`、`column_height`、`plinth_height`、`roof_rise`、`eaves`、`door_width` 和 `materials`。生成器会按参数同步调整柱网、梁、墙、门窗、台基、檐口和屋顶。
 
+## 三维预览与修改对比
+
+`jiangnan preview` 调用 Mine2Blend 将 Sponge `.schem` 转成 OBJ，再用 Blender 后台渲染俯视、正面、侧面和透视图。需要本机安装 Mine2Blend 和 Blender；输出目录必须为空或尚不存在，程序不会覆盖已有预览。
+
+```powershell
+$mine2blend = "E:\MCbuild\Mine2Blend\mcblock_mine2blend"
+$blender = "D:\SteamLibrary\steamapps\common\Blender\blender.exe"
+jiangnan preview `
+  --schematic workspace\exports\three_bay_hall-phase2.schem `
+  --output-dir workspace\previews\hall-v1 `
+  --mine2blend-root $mine2blend `
+  --blender $blender
+```
+
+可增加 `--compare-before <旧版本.schem>` 同时渲染新旧版本，并生成 `comparison.json`，其中包含按方块状态计算的新增、删除、替换和变化数量。每次预览另生成 `preview.json`，记录输入、尺寸、工具版本、相机范围和图片位置。
+
 ## 模块组合示例
 
 ```powershell
