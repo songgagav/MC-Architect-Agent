@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 import gzip
 import math
 from pathlib import Path
-from typing import Mapping
+from typing import BinaryIO, Mapping
 
 from nbtlib import Compound, File, List, LongArray
 
@@ -23,7 +23,30 @@ from .models import (
 PARSER_VERSION = "1.0"
 TARGET_MINECRAFT_DATA_VERSION = 4325
 MAX_LITEMATIC_VERSION = 7
+MAX_REGION_VOLUME = 8_388_608
+MAX_DOCUMENT_VOLUME = 8_388_608
+MAX_NBT_BYTES = 128 * 1024 * 1024
 _U64_MASK = (1 << 64) - 1
+
+
+class _SizeLimitedReader:
+    def __init__(self, source: BinaryIO, limit: int) -> None:
+        self.source = source
+        self.limit = limit
+        self.bytes_read = 0
+
+    def read(self, size: int = -1) -> bytes:
+        if size == 0:
+            return b""
+        remaining_with_probe = self.limit - self.bytes_read + 1
+        requested = remaining_with_probe if size < 0 else min(size, remaining_with_probe)
+        chunk = self.source.read(requested)
+        self.bytes_read += len(chunk)
+        if self.bytes_read > self.limit:
+            raise LitematicFormatError(
+                f"uncompressed NBT exceeds safety limit {self.limit:,} bytes"
+            )
+        return chunk
 
 
 def _integer(value: object, field: str) -> int:
@@ -65,13 +88,22 @@ def _read_palette(raw: object, region_name: str) -> tuple[LitematicBlockState, .
 
 def _parse_root(path: Path) -> File:
     try:
+        source_size = path.stat().st_size
+        if source_size > MAX_NBT_BYTES:
+            raise LitematicFormatError(f"Litematic file exceeds safety limit {MAX_NBT_BYTES:,} bytes")
         with path.open("rb") as stream:
             magic = stream.read(2)
             stream.seek(0)
             if magic == b"\x1f\x8b":
                 with gzip.GzipFile(fileobj=stream, mode="rb") as compressed:
-                    return File.parse(compressed)
-            return File.parse(stream)
+                    bounded = _SizeLimitedReader(compressed, MAX_NBT_BYTES)
+                    root = File.parse(bounded)
+                    while bounded.read(64 * 1024):
+                        pass
+                    return root
+            return File.parse(_SizeLimitedReader(stream, MAX_NBT_BYTES))
+    except LitematicFormatError:
+        raise
     except Exception as exc:
         raise LitematicFormatError(f"not a valid Litematic NBT file: {exc}") from exc
 
@@ -102,6 +134,7 @@ def read_litematic(path: str | Path) -> LitematicDocument:
         raise LitematicFormatError("Regions must be a non-empty NBT compound")
 
     regions: list[LitematicRegion] = []
+    document_volume = 0
     for region_name, raw_region in regions_tag.items():
         if not isinstance(region_name, str) or not isinstance(raw_region, Compound):
             raise LitematicFormatError("Regions contains a non-compound entry")
@@ -118,8 +151,15 @@ def read_litematic(path: str | Path) -> LitematicDocument:
         if any(value > 65535 for value in size):
             raise LitematicFormatError(f"region {region_name!r} dimension exceeds 65535 blocks")
         volume = math.prod(size)
-        if volume > 2**31 - 1:
-            raise LitematicFormatError(f"region {region_name!r} volume exceeds the supported index range")
+        if volume > MAX_REGION_VOLUME:
+            raise LitematicFormatError(
+                f"region {region_name!r} volume exceeds safety limit {MAX_REGION_VOLUME:,} blocks"
+            )
+        document_volume += volume
+        if document_volume > MAX_DOCUMENT_VOLUME:
+            raise LitematicFormatError(
+                f"Litematic total region volume exceeds safety limit {MAX_DOCUMENT_VOLUME:,} blocks"
+            )
         palette = _read_palette(raw_region.get("BlockStatePalette"), region_name)
         if not isinstance(raw_states, LongArray) or len(raw_states) == 0:
             raise LitematicFormatError(f"region {region_name!r} has an invalid or empty BlockStates long array")
@@ -217,11 +257,10 @@ def analyze_litematic(
             )
         )
     data_versions = [document.minecraft_data_version, *(region.minecraft_data_version for region in document.regions)]
-    observed_data_version = max(data_versions)
-    if observed_data_version < target_data_version:
-        compatibility = "older_than_target"
-    elif observed_data_version > target_data_version:
+    if any(version > target_data_version for version in data_versions):
         compatibility = "newer_than_target"
+    elif any(version < target_data_version for version in data_versions):
+        compatibility = "older_than_target"
     else:
         compatibility = "target"
     return LitematicAnalysis(

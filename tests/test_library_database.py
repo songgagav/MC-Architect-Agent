@@ -89,6 +89,22 @@ def test_import_changed_file_creates_next_asset_version_and_detects_corruption(t
     source.write_bytes(b"corrupt after import")
     with pytest.raises(AssetIntegrityError, match="SHA-256 mismatch"):
         service.verify_files("reference.sample")
+
+
+def test_import_marks_any_old_region_data_version_for_review_and_records_inventory(tmp_path: Path) -> None:
+    source = _write_litematic(
+        tmp_path / "references" / "mixed-versions.litematic",
+        regions={"older": ((0, 0, 0), (1, 1, 1), [1], 2)},
+        data_version=4325,
+        region_data_versions={"older": 3465},
+    )
+    service = LibraryService(LibraryDatabase(tmp_path / "library.sqlite3"), project_root=tmp_path)
+    service.initialize()
+
+    asset = service.import_litematic(source, asset_id="reference.mixed-versions", name="Mixed versions")
+
+    assert asset.validation_status == "parsed_older_data_version_requires_review"
+    assert asset.provenance["data_version_inventory"] == {"file": 4325, "regions": {"older": 3465}}
     with pytest.raises(LibraryLookupError, match="unknown reference asset"):
         service.get_reference("reference.missing")
 
@@ -224,6 +240,29 @@ def test_style_profile_uses_measured_reference_palette_candidates_without_semant
     assert set(profile["palette_candidates"]) == {"reference.fangtang", "reference.liusufang-frame"}
     assert profile["palette_candidates"]["reference.fangtang"][0]["block_state"] == "minecraft:stone"
     assert profile["visual_preferences"]["silhouette"]["status"] == "unverified"
+
+
+def test_style_profile_pins_reference_asset_versions_for_reproducible_palette_candidates(tmp_path: Path) -> None:
+    source = _write_litematic(
+        tmp_path / "references" / "fangtang-v1.litematic",
+        regions={"west": ((0, 0, 0), (1, 1, 1), [1], 2)},
+    )
+    service = LibraryService(LibraryDatabase(tmp_path / "library.sqlite3"), project_root=tmp_path)
+    service.initialize()
+    first = service.import_litematic(source, asset_id="reference.fangtang", name="Fangtang")
+    assert first.version == 1
+
+    second_source = _write_litematic(
+        tmp_path / "references" / "fangtang-v2.litematic",
+        regions={"west": ((0, 0, 0), (1, 1, 1), [4], 5)},
+    )
+    second = service.import_litematic(second_source, asset_id="reference.fangtang", name="Fangtang")
+    assert second.version == 2
+
+    profile = service.get_style_profile("jiangnan_mc_classic")
+
+    assert profile["resolved_reference_versions"]["reference.fangtang"] == 1
+    assert profile["palette_candidates"]["reference.fangtang"][0]["block_state"] == "minecraft:stone"
 
 
 def test_catalog_only_regions_never_enter_default_module_or_rule_queries(tmp_path: Path) -> None:

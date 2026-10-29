@@ -347,6 +347,16 @@ class LibraryService:
         profile_id = _nonempty(item.get("profile_id"), "style profile_id")
         version = _positive_int(item.get("version"), "style version")
         region_id = _nonempty(item.get("design_target_region_id"), "style design_target_region_id")
+        references = _string_list(item.get("reference_asset_ids", []), "style reference_asset_ids")
+        raw_reference_versions = item.get("reference_asset_versions", {})
+        if not isinstance(raw_reference_versions, Mapping):
+            raise ValueError(f"style profile {profile_id!r} reference_asset_versions must be an object")
+        if set(raw_reference_versions) - set(references):
+            raise ValueError(f"style profile {profile_id!r} pins an asset version not listed in reference_asset_ids")
+        reference_versions = {
+            asset_id: _positive_int(asset_version, f"style reference version for {asset_id}")
+            for asset_id, asset_version in raw_reference_versions.items()
+        }
         if connection.execute("SELECT 1 FROM region_profiles WHERE region_id = ?", (region_id,)).fetchone() is None:
             raise ValueError(f"style profile {profile_id!r} references unknown region {region_id!r}")
         schema_ref = item.get("parameter_schema")
@@ -393,12 +403,18 @@ class LibraryService:
             "DELETE FROM style_reference_assets WHERE profile_id = ? AND profile_version = ?",
             (profile_id, version),
         )
-        references = _string_list(item.get("reference_asset_ids", []), "style reference_asset_ids")
         for asset_id in references:
-            row = connection.execute(
-                "SELECT version FROM reference_assets WHERE asset_id = ? ORDER BY version DESC LIMIT 1",
-                (asset_id,),
-            ).fetchone()
+            pinned_version = reference_versions.get(asset_id)
+            if pinned_version is None:
+                row = connection.execute(
+                    "SELECT version FROM reference_assets WHERE asset_id = ? ORDER BY version DESC LIMIT 1",
+                    (asset_id,),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    "SELECT version FROM reference_assets WHERE asset_id = ? AND version = ?",
+                    (asset_id, pinned_version),
+                ).fetchone()
             if row is not None:
                 connection.execute(
                     """INSERT INTO style_reference_assets(
@@ -444,6 +460,10 @@ class LibraryService:
             "embedded_author": document.author or None,
             "source_file": source_file,
             "sha256": digest_before,
+            "data_version_inventory": {
+                "file": document.minecraft_data_version,
+                "regions": {region.name: region.minecraft_data_version for region in document.regions},
+            },
             "region_attribution": "unverified" if region_profile_id is None else "user_assigned",
             "note": provenance_note or "Imported for visual research; no historical or regional attribution inferred.",
         }
@@ -823,14 +843,13 @@ class LibraryService:
             for row in rows:
                 profile = _loads(row["profile_json"])
                 references = profile.get("reference_asset_ids", [])
-                available = [
-                    item["asset_id"]
-                    for item in connection.execute(
-                        """SELECT asset_id FROM reference_assets WHERE asset_id IN (
-                               SELECT value FROM json_each(?)) GROUP BY asset_id ORDER BY asset_id""",
-                        (_json(references),),
-                    ).fetchall()
-                ]
+                resolved = connection.execute(
+                    """SELECT asset_id, asset_version FROM style_reference_assets
+                       WHERE profile_id = ? AND profile_version = ? ORDER BY asset_id""",
+                    (row["profile_id"], row["version"]),
+                ).fetchall()
+                resolved_versions = {item["asset_id"]: int(item["asset_version"]) for item in resolved}
+                missing = sorted(set(references) - set(resolved_versions))
                 results.append(
                     {
                         "profile_id": row["profile_id"],
@@ -839,7 +858,9 @@ class LibraryService:
                         "region_profile_id": row["region_profile_id"],
                         "status": row["status"],
                         "reference_asset_ids": references,
-                        "reference_status": "ready" if set(references) <= set(available) else "missing_references",
+                        "resolved_reference_versions": resolved_versions,
+                        "missing_reference_asset_ids": missing,
+                        "reference_status": "ready" if not missing else "missing_references",
                     }
                 )
             return tuple(results)
@@ -863,16 +884,27 @@ class LibraryService:
             for asset_id in profile.get("reference_asset_ids", []):
                 ref = connection.execute(
                     """SELECT ra.*, rf.file_format, rf.sha256, rf.minecraft_data_version
-                       FROM reference_assets ra JOIN reference_files rf USING(file_id)
-                       WHERE ra.asset_id = ? ORDER BY ra.version DESC LIMIT 1""",
-                    (asset_id,),
+                       FROM style_reference_assets link
+                       JOIN reference_assets ra ON ra.asset_id = link.asset_id AND ra.version = link.asset_version
+                       JOIN reference_files rf ON rf.file_id = ra.file_id
+                       WHERE link.profile_id = ? AND link.profile_version = ? AND link.asset_id = ?""",
+                    (row["profile_id"], row["version"], asset_id),
                 ).fetchone()
                 if ref is not None:
                     refs[asset_id] = _asset_from_row(ref)
             missing = sorted(set(profile.get("reference_asset_ids", [])) - set(refs))
+            missing_versions = {
+                asset_id: int(profile["reference_asset_versions"][asset_id])
+                for asset_id in missing
+                if asset_id in profile.get("reference_asset_versions", {})
+            }
             if require_references and missing:
+                missing_labels = [
+                    f"{asset_id}@{missing_versions[asset_id]}" if asset_id in missing_versions else asset_id
+                    for asset_id in missing
+                ]
                 raise LibraryLookupError(
-                    f"style profile {profile_id!r} reference asset(s) not imported: {', '.join(missing)}"
+                    f"style profile {profile_id!r} reference asset(s) not imported: {', '.join(missing_labels)}"
                 )
             palette_limit = int(profile.get("palette_selection", {}).get("top_material_count", 12))
             candidates: dict[str, list[dict[str, object]]] = {}
@@ -891,6 +923,8 @@ class LibraryService:
                 "definition_path": row["definition_path"],
                 "reference_status": "ready" if not missing else "missing_references",
                 "missing_reference_asset_ids": missing,
+                "missing_reference_asset_versions": missing_versions,
+                "resolved_reference_versions": {asset_id: asset.version for asset_id, asset in refs.items()},
                 "palette_candidates": candidates,
             }
 
@@ -947,6 +981,9 @@ class LibraryService:
         for style in styles:
             profile = _loads(style["profile_json"])
             if asset_id not in profile.get("reference_asset_ids", []):
+                continue
+            pinned_version = profile.get("reference_asset_versions", {}).get(asset_id)
+            if pinned_version is not None and int(pinned_version) != asset_version:
                 continue
             connection.execute(
                 """DELETE FROM style_reference_assets

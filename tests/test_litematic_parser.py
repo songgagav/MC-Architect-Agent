@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from nbtlib import Compound, File, Int, List, LongArray, String
 
+from jiangnan_agent.library import litematic as litematic_module
 from jiangnan_agent.library.litematic import LitematicFormatError, analyze_litematic, read_litematic
 
 
@@ -20,7 +21,7 @@ def _pack(values: list[int], palette_size: int) -> list[int]:
         assert 0 <= value <= mask
         bit_index = index * bits
         word_index, bit_offset = divmod(bit_index, 64)
-        words[word_index] |= (value & mask) << bit_offset
+        words[word_index] |= ((value & mask) << bit_offset) & MASK64
         if bit_offset + bits > 64:
             words[word_index + 1] |= value >> (64 - bit_offset)
     return [word if word <= (1 << 63) - 1 else word - (1 << 64) for word in words]
@@ -42,6 +43,8 @@ def _write_litematic(
     palette: list[Compound] | None = None,
     data_version: int = 4325,
     schematic_version: int = 6,
+    region_data_versions: dict[str, int] | None = None,
+    compressed: bool = True,
 ) -> Path:
     shared_palette = palette or [
         _palette_entry("minecraft:air"),
@@ -54,14 +57,15 @@ def _write_litematic(
     for name, (position, size, values, local_palette_size) in regions.items():
         region_volume = abs(size[0]) * abs(size[1]) * abs(size[2])
         assert len(values) == region_volume
-        region_tags[name] = Compound(
-            {
+        region_data = {
                 "Position": Compound({axis: Int(value) for axis, value in zip("xyz", position)}),
                 "Size": Compound({axis: Int(value) for axis, value in zip("xyz", size)}),
                 "BlockStatePalette": List[Compound](shared_palette[:local_palette_size]),
                 "BlockStates": LongArray(_pack(values, local_palette_size)),
             }
-        )
+        if region_data_versions is not None and name in region_data_versions:
+            region_data["DataVersion"] = Int(region_data_versions[name])
+        region_tags[name] = Compound(region_data)
     data = File(
         {
             "Version": Int(schematic_version),
@@ -74,8 +78,12 @@ def _write_litematic(
         }
     )
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb") as compressed:
-        data.write(compressed)
+    with path.open("wb") as raw:
+        if compressed:
+            with gzip.GzipFile(fileobj=raw, mode="wb") as compressed_stream:
+                data.write(compressed_stream)
+        else:
+            data.write(raw)
     return path
 
 
@@ -158,6 +166,100 @@ def test_parser_reports_newer_data_version_without_claiming_compatibility(tmp_pa
     result = analyze_litematic(read_litematic(source), target_data_version=4325)
 
     assert result.compatibility_status == "newer_than_target"
+
+
+def test_parser_uses_region_versions_when_root_version_matches_target(tmp_path: Path) -> None:
+    source = _write_litematic(
+        tmp_path / "mixed-data-versions.litematic",
+        regions={"older-region": ((0, 0, 0), (1, 1, 1), [1], 2)},
+        data_version=4325,
+        region_data_versions={"older-region": 3465},
+    )
+
+    result = analyze_litematic(read_litematic(source), target_data_version=4325)
+
+    assert result.compatibility_status == "older_than_target"
+
+
+def test_parser_decodes_block_states_across_packed_long_boundary(tmp_path: Path) -> None:
+    values = [0] * 24
+    values[20] = 3
+    values[21] = 4
+    source = _write_litematic(
+        tmp_path / "cross-word.litematic",
+        regions={"main": ((0, 0, 0), (24, 1, 1), values, 5)},
+    )
+
+    region = read_litematic(source).regions[0]
+
+    assert region.bits_per_block == 3
+    assert region.block_state_at_index(20).name == "minecraft:glass"
+    assert region.block_state_at_index(21).name == "minecraft:oak_log"
+
+
+def test_parser_reads_uncompressed_nbt(tmp_path: Path) -> None:
+    source = _write_litematic(
+        tmp_path / "uncompressed.litematic",
+        regions={"main": ((0, 0, 0), (1, 1, 1), [1], 2)},
+        compressed=False,
+    )
+
+    assert read_litematic(source).regions[0].block_state_at_index(0).name == "minecraft:stone"
+
+
+def test_parser_rejects_regions_over_the_configured_volume_safety_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(litematic_module, "MAX_REGION_VOLUME", 2, raising=False)
+    source = _write_litematic(
+        tmp_path / "over-volume-limit.litematic",
+        regions={"main": ((0, 0, 0), (3, 1, 1), [1, 1, 1], 2)},
+    )
+
+    with pytest.raises(LitematicFormatError, match="volume exceeds safety limit"):
+        read_litematic(source)
+
+
+def test_parser_rejects_many_regions_over_the_configured_total_volume_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(litematic_module, "MAX_DOCUMENT_VOLUME", 3, raising=False)
+    source = _write_litematic(
+        tmp_path / "over-total-volume-limit.litematic",
+        regions={
+            "first": ((0, 0, 0), (2, 1, 1), [1, 1], 2),
+            "second": ((4, 0, 0), (2, 1, 1), [1, 1], 2),
+        },
+    )
+
+    with pytest.raises(LitematicFormatError, match="total region volume exceeds safety limit"):
+        read_litematic(source)
+
+
+def test_parser_bounds_decompressed_nbt_size(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = _write_litematic(
+        tmp_path / "compressed-large-nbt.litematic",
+        regions={"main": ((0, 0, 0), (1, 1, 1), [1], 2)},
+    )
+    compressed_size = source.stat().st_size
+    assert len(gzip.decompress(source.read_bytes())) > compressed_size
+    monkeypatch.setattr(litematic_module, "MAX_NBT_BYTES", compressed_size + 1, raising=False)
+
+    with pytest.raises(LitematicFormatError, match="uncompressed NBT exceeds safety limit"):
+        read_litematic(source)
+
+
+def test_parser_checks_gzip_trailer_integrity(tmp_path: Path) -> None:
+    source = _write_litematic(
+        tmp_path / "bad-gzip-trailer.litematic",
+        regions={"main": ((0, 0, 0), (1, 1, 1), [1], 2)},
+    )
+    payload = bytearray(source.read_bytes())
+    payload[-1] ^= 0xFF
+    source.write_bytes(payload)
+
+    with pytest.raises(LitematicFormatError):
+        read_litematic(source)
 
 
 def test_parser_accepts_nonempty_long_array_with_zero_first_word(tmp_path: Path) -> None:
