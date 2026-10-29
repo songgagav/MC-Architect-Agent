@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import re
+import sys
 
 from .generators.hall import HallParameters, generate_hall
 from .generators.simple_house import SimpleHouseConfig, generate_simple_house
 from .io.project_json import JiangnanProject, load_project, save_project
+from .io.project_editor import ProjectEditor
 from .io.schematic import write_schematic
 
 
@@ -26,6 +28,15 @@ def main() -> int:
 
     info_parser = subparsers.add_parser("info", help="show project metadata")
     info_parser.add_argument("project", type=Path, help="project JSON path")
+
+    history_parser = subparsers.add_parser("history", help="show project revision history")
+    history_parser.add_argument("project", type=Path, help="project JSON path")
+
+    undo_parser = subparsers.add_parser("undo", help="restore the previous project revision")
+    undo_parser.add_argument("project", type=Path, help="project JSON path")
+
+    redo_parser = subparsers.add_parser("redo", help="restore the next project revision")
+    redo_parser.add_argument("project", type=Path, help="project JSON path")
 
     generate_parser = subparsers.add_parser("generate", help="generate a building as Sponge v3 .schem")
     generate_parser.add_argument("--project", required=True, type=Path, help="project JSON path")
@@ -49,7 +60,26 @@ def main() -> int:
             print(f"名称: {project.name}")
             print(f"工程 ID: {project.project_id}")
             print(f"Minecraft: Java {project.minecraft_version} (DataVersion {project.data_version})")
-            print(f"模块数: {len(project.modules)}")
+            print(f"模块数: {len(project.assembly.modules)}")
+            revision = project.revision_history[project.revision_cursor]
+            print(f"当前版本: {revision.revision_id} | {revision.message}")
+        elif args.command == "history":
+            for index, revision in enumerate(project.revision_history):
+                marker = "（当前）" if index == project.revision_cursor else ""
+                affected = ", ".join(revision.changed_module_ids) or "无"
+                print(f"版本 {revision.revision_id}{marker}: {revision.message}")
+                print(f"  受影响模块: {affected} | 方块变更: {len(revision.block_changes)}")
+        elif args.command in ("undo", "redo"):
+            editor = ProjectEditor(project)
+            changed = editor.undo() if args.command == "undo" else editor.redo()
+            if not changed:
+                verb = "撤销" if args.command == "undo" else "重做"
+                print(f"没有可{verb}的更改", file=sys.stderr)
+                return 1
+            save_project(project, args.project)
+            revision = editor.current_revision
+            verb = "撤销" if args.command == "undo" else "重做"
+            print(f"已{verb}至版本 {revision.revision_id}: {revision.message}")
         else:
             building = project.settings.get("building", {})
             building_type = building.get("type", "simple_house")

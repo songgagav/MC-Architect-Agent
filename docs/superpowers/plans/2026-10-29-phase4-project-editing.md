@@ -116,10 +116,11 @@
 - `jiangnan history PROJECT`, `jiangnan undo PROJECT`, and `jiangnan redo PROJECT` operate on the saved `.jap.json`.
 - `info` reports the selected revision and module count from the Assembly.
 
-- [ ] **Step 1: Write failing CLI tests** for history output, saved undo/redo round-trip, and nonzero/no-write behavior when no undo/redo is available.
-- [ ] **Step 2: Run** `pytest tests/test_cli.py -q`; confirm the new commands are unrecognized.
-- [ ] **Step 3: Implement** the three commands and update user documentation/roadmap with automated versus in-game acceptance status.
-- [ ] **Step 4: Run** `pytest -q` and the CLI history flow against a temporary project; run `git diff --check`.
+- [x] **Step 1: Write failing CLI tests** for history output, saved undo/redo round-trip, and nonzero/no-write behavior when no undo/redo is available.
+- [x] **Step 2: Run** `pytest tests/test_cli.py -q`; confirm the new commands are unrecognized.
+- [x] **Step 3: Implement** the three commands and update user documentation/roadmap with automated versus in-game acceptance status.
+- [x] **Step 4: Run** `pytest -q` and the CLI history flow against a temporary project; run `git diff --check`.
+- [x] **Step 5: Commit** Task 5 as `feat: expose project history commands`.
 
 ### Task 6: Whole-Branch Review and Commit
 

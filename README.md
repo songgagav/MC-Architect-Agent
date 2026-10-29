@@ -28,6 +28,26 @@ jiangnan info workspace\projects\suzhou-hall.jap.json
 
 工程文件以 JSON 保存，包括工程 ID、目标 Minecraft 版本、DataVersion、模块列表与生成设置。
 
+版本 2 工程还保存模块的方块、生成参数、连接锚点、净空区和组合关系；版本 1 工程可直接读取，保存时迁移为版本 2。
+
+查看编辑记录并撤销/重做：
+
+```powershell
+jiangnan history workspace\projects\suzhou-hall.jap.json
+jiangnan undo workspace\projects\suzhou-hall.jap.json
+jiangnan redo workspace\projects\suzhou-hall.jap.json
+```
+
+Python API 可按模块 ID 重新生成厅堂或直廊，记录方块差异，并在工程中保留撤销/重做快照：
+
+```python
+from jiangnan_agent.io import ProjectEditor, load_project, save_project
+
+project = load_project("workspace/projects/suzhou-hall.jap.json")
+ProjectEditor(project).regenerate_module("hall-main", {"bay_count": 5}, "调整为五开间")
+save_project(project, "workspace/projects/suzhou-hall.jap.json")
+```
+
 ## 生成建筑
 
 ```powershell
@@ -68,6 +88,7 @@ GitHub Actions 在 Windows 和 Ubuntu、Python 3.12 上运行同一套 pytest。
 - `jiangnan_agent/core/`：方块、坐标、边界、稀疏方块模型和变换。
 - `jiangnan_agent/assembly/`：模块锚点、平移/旋转/镜像、连接图、拆分/替换、冲突校验和组合渲染。
 - `jiangnan_agent/io/`：工程 JSON 与 Sponge v3 读写。
+- 工程编辑器保存完整组合快照、方块差异，并提供撤销/重做。
 - `jiangnan_agent/generators/`：基础构件、参数化厅堂/直廊与简单房屋生成器。
 - `tests/`：方块模型、工程 JSON、命令行、Sponge 文件和简单房屋测试。
 - `docs/roadmap.md`：完整九阶段路线图。
