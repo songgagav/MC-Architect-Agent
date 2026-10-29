@@ -6,8 +6,10 @@ from collections.abc import Mapping
 
 from ..assembly.adapters import corridor_module, hall_module
 from ..assembly.model import Assembly, Module
+from ..assembly.operations import connect_modules as connect_assembly_modules
 from ..assembly.operations import replace_module as replace_assembly_module
 from ..assembly.transforms import mirror_module, rotate_module, translate_module
+from ..core.geometry import Position
 from ..generators.hall import CorridorParameters, HallParameters
 from .assembly_json import assembly_to_dict
 from .project_history import ProjectRevision, diff_assemblies
@@ -33,6 +35,79 @@ class ProjectEditor:
     @property
     def current_revision(self) -> ProjectRevision:
         return self.project.revision_history[self.project.revision_cursor]
+
+    def add_module(self, module: Module, message: str) -> ProjectRevision:
+        """Add one module and record its complete block delta as a revision."""
+
+        self._ensure_current_snapshot()
+        if not isinstance(module, Module):
+            raise ValueError("module must be a Module")
+        next_assembly = Assembly((*self.project.assembly.modules.values(), module), self.project.assembly.connections)
+        return self._record(next_assembly, module.module_id, message)
+
+    def transform_module(
+        self,
+        module_id: str,
+        operation: str,
+        message: str,
+        *,
+        offset: Position | None = None,
+        quarter_turns: int | None = None,
+        axis: str | None = None,
+    ) -> ProjectRevision:
+        """Apply one recorded geometric transform to exactly one module."""
+
+        self._ensure_current_snapshot()
+        if module_id not in self.project.assembly.modules:
+            raise ValueError(f"unknown module ID: {module_id!r}")
+        if operation not in ("translate", "rotate_y", "mirror"):
+            raise ValueError("operation must be translate, rotate_y, or mirror")
+
+        supplied = {
+            "offset": offset,
+            "quarter_turns": quarter_turns,
+            "axis": axis,
+        }
+        required = {
+            "translate": "offset",
+            "rotate_y": "quarter_turns",
+            "mirror": "axis",
+        }[operation]
+        if supplied[required] is None or any(name != required and value is not None for name, value in supplied.items()):
+            raise ValueError(f"operation {operation!r} requires only {required}")
+
+        current = self.project.assembly.modules[module_id]
+        if operation == "translate":
+            assert offset is not None
+            transformed = translate_module(current, offset)
+        elif operation == "rotate_y":
+            assert quarter_turns is not None
+            transformed = rotate_module(current, quarter_turns)
+        else:
+            assert axis is not None
+            transformed = mirror_module(current, axis)
+        next_assembly = replace_assembly_module(self.project.assembly, module_id, transformed)
+        return self._record(next_assembly, module_id, message)
+
+    def connect_modules(
+        self,
+        first_module_id: str,
+        first_anchor_name: str,
+        second_module: Module | str,
+        second_anchor_name: str,
+        message: str,
+    ) -> ProjectRevision:
+        """Connect existing aligned modules or attach and auto-place a new module."""
+
+        self._ensure_current_snapshot()
+        next_assembly = connect_assembly_modules(
+            self.project.assembly,
+            first_module_id,
+            first_anchor_name,
+            second_module,
+            second_anchor_name,
+        )
+        return self._record(next_assembly, first_module_id, message)
 
     def replace_module(self, module_id: str, replacement: Module, message: str) -> ProjectRevision:
         self._ensure_current_snapshot()

@@ -145,3 +145,166 @@ def test_undo_rejects_unrecorded_live_model_mutation() -> None:
 
     assert project.revision_cursor == 1
     assert project.assembly.modules["corridor-1"].model.block_at((0, 0, 0)).block_id == "minecraft:gold_block"
+
+
+def test_add_module_records_block_delta_and_supports_undo_redo() -> None:
+    project = JiangnanProject(name="New hall")
+    editor = ProjectEditor(project)
+    hall = hall_module("hall-main", HallParameters(bay_count=3))
+
+    revision = editor.add_module(hall, "Create three-bay hall")
+
+    assert set(project.assembly.modules) == {"hall-main"}
+    assert revision.revision_id == 1
+    assert revision.parent_revision_id == 0
+    assert revision.changed_module_ids == ("hall-main",)
+    assert len(revision.block_changes) == len(hall.model.blocks)
+    assert all(change.module_id == "hall-main" and change.before_state is None for change in revision.block_changes)
+    assert editor.undo() is True
+    assert project.assembly.modules == {}
+    assert editor.redo() is True
+    assert project.assembly.modules["hall-main"].model.blocks == hall.model.blocks
+
+
+def test_connect_new_module_records_aligned_module_and_connection() -> None:
+    main_hall = hall_module("hall-main", HallParameters(bay_count=3))
+    project = JiangnanProject(name="Connected halls", assembly=Assembly((main_hall,)))
+    editor = ProjectEditor(project)
+    side_hall = hall_module("hall-side", HallParameters(bay_count=3))
+
+    revision = editor.connect_modules(
+        "hall-main",
+        "front",
+        side_hall,
+        "front",
+        "Attach side hall",
+    )
+
+    placed = project.assembly.modules["hall-side"]
+    first_anchor = project.assembly.modules["hall-main"].anchor("front")
+    second_anchor = placed.anchor("front")
+    opposite = {"north": "south", "east": "west", "south": "north", "west": "east"}
+    assert second_anchor.position == first_anchor.position
+    assert second_anchor.facing == opposite[first_anchor.facing]
+    assert len(project.assembly.connections) == 1
+    assert revision.changed_module_ids == ("hall-main", "hall-side")
+    assert len(revision.block_changes) == len(placed.model.blocks)
+    assert all(change.module_id == "hall-side" for change in revision.block_changes)
+
+    assert editor.undo() is True
+    assert set(project.assembly.modules) == {"hall-main"}
+    assert project.assembly.connections == ()
+    assert editor.redo() is True
+    assert set(project.assembly.modules) == {"hall-main", "hall-side"}
+    assert len(project.assembly.connections) == 1
+
+
+def test_transform_module_records_exact_delta() -> None:
+    project = JiangnanProject(name="Move hall", assembly=Assembly((hall_module("hall-main"),)))
+    editor = ProjectEditor(project)
+    original = project.assembly.modules["hall-main"]
+    original_blocks = dict(original.model.blocks)
+    offset = (100, 2, -7)
+
+    revision = editor.transform_module(
+        "hall-main",
+        "translate",
+        "Move hall east",
+        offset=offset,
+    )
+
+    moved = project.assembly.modules["hall-main"]
+    expected_blocks = {
+        (position[0] + offset[0], position[1] + offset[1], position[2] + offset[2]): state
+        for position, state in original_blocks.items()
+    }
+    assert moved.model.blocks == expected_blocks
+    assert moved.anchor("front").position == tuple(
+        coordinate + delta for coordinate, delta in zip(original.anchor("front").position, offset)
+    )
+    assert moved.transform_steps[-1] == {"op": "translate", "offset": offset}
+    assert revision.changed_module_ids == ("hall-main",)
+    assert len(revision.block_changes) == 2 * len(original_blocks)
+    removed = {change.position for change in revision.block_changes if change.after_state is None}
+    added = {change.position for change in revision.block_changes if change.before_state is None}
+    assert removed == set(original_blocks)
+    assert added == set(expected_blocks)
+
+
+@pytest.mark.parametrize(
+    ("operation", "arguments", "expected_facing", "expected_step"),
+    (
+        ("rotate_y", {"quarter_turns": 1}, "east", {"op": "rotate_y", "quarter_turns": 1}),
+        ("mirror", {"axis": "z"}, "south", {"op": "mirror", "axis": "z"}),
+    ),
+)
+def test_transform_module_preserves_directional_state_and_records_operation(
+    operation: str,
+    arguments: dict[str, object],
+    expected_facing: str,
+    expected_step: dict[str, object],
+) -> None:
+    model = VoxelModel()
+    model.set_block((0, 0, 0), "minecraft:oak_stairs[facing=north,half=bottom,shape=straight,waterlogged=false]")
+    project = JiangnanProject(name="Directional transform", assembly=Assembly((Module("roof", "part", model),)))
+
+    revision = ProjectEditor(project).transform_module("roof", operation, "Transform roof", **arguments)
+
+    rotated_state = project.assembly.modules["roof"].model.block_at((0, 0, 0))
+    assert dict(rotated_state.properties)["facing"] == expected_facing
+    assert project.assembly.modules["roof"].transform_steps[-1] == expected_step
+    assert revision.changed_module_ids == ("roof",)
+    assert len(revision.block_changes) == 1
+    change = revision.block_changes[0]
+    assert change.before_state == "minecraft:oak_stairs[facing=north,half=bottom,shape=straight,waterlogged=false]"
+    assert change.after_state == (
+        f"minecraft:oak_stairs[facing={expected_facing},half=bottom,shape=straight,waterlogged=false]"
+    )
+    assert {change.position for change in revision.block_changes} == {(0, 0, 0)}
+
+
+@pytest.mark.parametrize(
+    ("operation", "arguments"),
+    (
+        ("tilt", {}),
+        ("translate", {}),
+        ("rotate_y", {}),
+        ("mirror", {}),
+        ("translate", {"offset": (1, 0, 0), "axis": "x"}),
+    ),
+)
+def test_transform_module_rejects_invalid_or_conflicting_arguments(
+    operation: str,
+    arguments: dict[str, object],
+) -> None:
+    project = JiangnanProject(name="Invalid transform", assembly=Assembly((hall_module("hall-main"),)))
+    editor = ProjectEditor(project)
+    before = project.revision_history[0].snapshot_json
+
+    with pytest.raises(ValueError):
+        editor.transform_module("hall-main", operation, "Invalid transform", **arguments)
+
+    assert project.revision_cursor == 0
+    assert len(project.revision_history) == 1
+    assert project.revision_history[0].snapshot_json == before
+
+
+@pytest.mark.parametrize("operation", ("add", "transform", "connect"))
+def test_new_mutations_reject_unrecorded_assembly_changes(operation: str) -> None:
+    project = make_project()
+    editor = ProjectEditor(project)
+    project.assembly.modules["corridor-1"].model.set_block((0, 0, 0), "minecraft:gold_block")
+
+    if operation == "add":
+        mutate = lambda: editor.add_module(hall_module("hall-new"), "Add hall")
+    elif operation == "transform":
+        mutate = lambda: editor.transform_module("hall-1", "translate", "Move hall", offset=(1, 0, 0))
+    else:
+        mutate = lambda: editor.connect_modules("hall-1", "front", "corridor-1", "start", "Connect")
+
+    with pytest.raises(ValueError, match="revision snapshot"):
+        mutate()
+
+    assert len(project.revision_history) == 1
+    assert project.revision_cursor == 0
+    assert project.assembly.modules["corridor-1"].model.block_at((0, 0, 0)).block_id == "minecraft:gold_block"
