@@ -1,50 +1,57 @@
 # 地域知识范围与参考资料
 
-本文区分当前可查询的知识记录、用户提供的视觉参考和仅供后续研究的地域候选。候选项暂不进入 Knowledge Base、参数 schema、Asset Library 或生成器。
+Knowledge Base v3 将来源、规则和地域配置分别保存到 `jiangnan_agent/knowledge/v3/sources.json`、`rules.json` 和 `regions.json`。查询按地域 ID 精确匹配，不推断行政层级或风格相似性。规则分为已核查的 `active` 和待核查的 `pending_verification`；普通查询隐藏待核查记录。
 
-## 当前知识范围
+## 当前启用地域
 
-本轮聚焦用户指定的“长江中下游的江南徽派建筑风格”。这是项目范围，不代表长江中下游存在一种边界统一、内部完全一致的历史风格。可查询规则使用精确地域标签，不通过父子地区关系自动扩展：
+| 地域 ID | 范围 | 状态 |
+| --- | --- | --- |
+| `huizhou_core` | UNESCO 列入的西递、宏村，仅限其村落级描述 | `active` |
+| `jiangnan_suzhou` | UNESCO 列入的苏州古典园林，仅限园林级描述 | `active` |
+| `jiaxing_huzhou_water_towns` | 嘉兴/湖州水乡 | `catalog_only` |
+| `ningbo_east_zhejiang` | 宁波/浙东 | `catalog_only` |
+| `yangzhou_canal` | 扬州/运河地区 | `catalog_only` |
+| `shanghai_songjiang` | 上海/松江 | `catalog_only` |
 
-- `cn.anhui.south.huangshan.yixian.xidi-hongcun`：仅对应 UNESCO 名录中的西递、宏村。
-- `cn.anhui.south.huizhou`：用于黄山市地方志办网页所概述的徽州宅居内容；每条规则的范围仍以条目自身说明为准。
-- `user.selected.lower_yangtze.jiangnan_huizhou`：用户选定的项目范围，只是用户偏好记录。
+目录项状态不代表其知识已经入库。目录专用地域没有可执行规则；当前没有将嘉兴、浙东、扬州或松江的规则接入参数或生成器。
 
-文献事实、Minecraft 方块适配和用户偏好分开保存。现有的历史/地方资料描述用于定性规则，未推导或声称任何统一的开间、柱网、进深、柱高或屋顶尺寸。Knowledge Base v2 尚未改变现有厅堂和回廊的方块生成逻辑。
+## v3 当前规则及出处
 
-## 用户投影文件审阅
+| 来源 ID | 核查状态 | v3 中允许支持的内容 | 明确不支持 |
+| --- | --- | --- | --- |
+| `unesco.xidi-hongcun.ouval` — [UNESCO：皖南古村落－西递、宏村](https://whc.unesco.org/en/list/1002/) | 官方页面全文已核查；定位为 Description（中文）及 Outstanding Universal Value > Brief synthesis（英文） | 名录对西递、宏村的位置、村落格局、景观、建筑、装饰和水系的描述 | 推广为所有徽州住宅的规则；历史开间、柱网、进深、柱高或屋面尺寸 |
+| `unesco.suzhou-gardens.ouval` — [UNESCO：苏州古典园林](https://whc.unesco.org/en/list/813/) | 官方页面全文已核查；定位为 Description（中文）及 Outstanding Universal Value > Brief synthesis（英文） | 名录对苏州古典园林、缩景设计及水、石、植物和建筑等园林元素的描述 | 推广为所有江南住宅/园林的统一布局、构造做法或比例 |
+| `huangshan.gazette.hui-residence-elements.2021` — [黄山市政府：徽州宅居要素](https://www.huangshan.gov.cn/zjhs/rwhz/hpjz/8294057.html) | 仅元数据可见；本次未取回正文和章节定位；相关 v3 规则为 `pending_verification` | 仅保留待核查任务 | v3 默认查询、参数默认值、生成器规则和历史标准 |
+| `huangshan.gazette.hui-residence.2019` — [黄山市政府：徽州宅居](https://www.huangshan.gov.cn/zjhs/rwhz/fsmq/8294878.html) | 仅元数据可见；本次未取回正文和章节定位 | 来源目录记录 | 未核实的正文摘要或任何尺寸标准 |
+| `suzhou.garden-admin.architecture` — [苏州市园林和绿化管理局：建筑](https://ylj.suzhou.gov.cn/szsylj/ylys/201903/484421d38f504f5787a8f307925e3ad7.shtml) | 页面正文未成功取回；仅列为来源入口，不关联活动规则 | 后续全文核查入口 | 建筑形式、构造或尺寸结论 |
 
-`E:\MCbuild\Template` 中的两个文件已用 Mine2Blend 与 Blender 生成四向预览。以下是文件属性及画面观察，目的是留存可复现的用户视觉参考，不是判断其历史年代、地域来源或真实性。
+UNESCO 页面未给出页面出版日期，因此来源记录把 `publication_date` 留空，并在 `date_note` 中记录页面所列的遗产列入年份。章节定位、核查等级、访问日期均在 JSON 来源记录中。地方网页未核实的日期不会从搜索摘要推定。
 
-| 文件 | Litematic 尺寸 | 文件元数据方块数 | 调色板项数 | SHA-256 |
-|---|---:|---:|---:|---|
+规则中的 `confidence=high` 指规则准确转述了所引用的官方名录文字，不代表该文字可以外推到其他地域、建筑类型或年代。v3 的活动规则是描述性知识，不自动生成历史尺寸或营造指令。
+
+### 查询示例
+
+```json
+{
+  "knowledge_base_version": 3,
+  "region": "huizhou_core",
+  "building_type": "traditional_village",
+  "evidence_kind": "literature_fact"
+}
+```
+
+返回记录含 `source_id`、题名、作者/发布机构、日期说明、URL/DOI/ISBN、章节定位、核查等级、适用范围和规则状态。普通查询不返回待核查条目。兼容性调用仍可显式选择知识库 v1 或 v2；这些旧版记录保留其原始数据，不会被静默改写。
+
+## 参数/游戏适配与用户参考的边界
+
+- 生成器规则标记为 `minecraft_adaptation`，描述当前 Python 生成行为，不是传统建筑事实。
+- 用户偏好（如自由组合模块）标记为 `user_preference`，不是文献证据。
+- `E:\MCbuild\Template` 中两个 Litematica 文件只作视觉参考，摘要用于识别本地原件；不据此推断年代、地域真实性或营造标准。
+- 用户输入、测绘数据、派生值和 Minecraft 游戏适配参数在参数注册表中分开记录。当前生成器默认值是可复现的 Minecraft 设计输入，不得描述为历史测绘数据。
+
+| 本地文件 | 尺寸 | 文件元数据方块数 | 调色板项 | SHA-256 |
+| --- | ---: | ---: | ---: | --- |
 | `芳堂-茯茯角.litematic` | 43 × 36 × 42 | 7,930 | 123 | `0bb61a4466780f3afa625c654481e344a1271c063ac3adc3c7d8139f3e2d3d9a` |
 | `流苏坊框架-茯茯角.litematic` | 31 × 31 × 32 | 3,909 | 84 | `a26bc4b06639bf33236f5fa2905fb830f26caecb671387c785bcd0259ecbda7e` |
 
-预览中可观察到深灰色屋面、浅色墙体、分层屋面与不同体量组合。这些仅记录为本项目可参考的配色、体量和 Minecraft 方块表现；规则来源明确标注为 `user_preference`，不能据此断言它们代表徽派传统做法。原始投影文件没有复制进仓库，也未被修改。
-
-本机生成的八张预览保存在 `workspace/previews/template-reference-20261029/`。原投影文件及其派生预览都留在本地，不纳入仓库提交；知识条目只记录原件相对路径和摘要，供本机核对来源。
-
-## 规则出处与适用边界
-
-| 记录 | 类型 | 可支持的内容 | 不支持的推断 |
-|---|---|---|---|
-| [UNESCO：西递、宏村](https://whc.unesco.org/en/list/1002/) | `literature_fact` | 名录对两处村落的位置、历史时期、聚落格局、建筑、装饰和水系的描述 | 将场地级描述直接套到所有徽州住宅或整个江南 |
-| [黄山市人民政府/市志办：徽州宅居要素](https://www.huangshan.gov.cn/zjhs/rwhz/hpjz/8294057.html) | `literature_fact` | 网页所概述的黛瓦/灰瓦、白墙、马头墙、砖木石雕及所述宅居形式 | 统一材料规范、统一平面类型或未经来源支持的尺寸 |
-| [黄山市人民政府/市志办：徽州宅居](https://www.huangshan.gov.cn/zjhs/rwhz/fsmq/8294878.html) | 参考来源 | 作为地方志办相关概述的补充检索入口 | 自动升级成所有历史时期的通用结论 |
-
-黄山市政府网页是地方志办提供的概述资料，因此相应条目采用中等置信级别，并限制为定性描述。UNESCO 条目也严格限定到名录地点和其描述范围。
-
-## 后续候选地域（尚未接入）
-
-下列资料用于确定后续查证方向。当前没有为这些地区增加知识规则、参数默认值或生成行为。
-
-| 候选地域 | 后续可调查主题 | 状态与资料入口 |
-|---|---|---|
-| 苏州—太湖 | 宅园关系、园林空间、厅堂与院落的衔接 | 仅列候选：[苏州市园林和绿化管理局建筑资料](https://ylj.suzhou.gov.cn/szsylj/ylys/201903/484421d38f504f5787a8f307925e3ad7.shtml)、[师俭园资料](https://ylj.suzhou.gov.cn/szsylj/ylml/201912/0e8becef868a4f4b8b6618a4ba4e84c8.shtml) |
-| 嘉兴—湖州水乡（乌镇、南浔、西塘） | 临水街巷、河埠、住宅与水系关系 | 仅列候选：[文旅部乌镇资料](https://sjfw.mct.gov.cn/site/dataservice/culdetails?curId=10&id=34882)、[文旅部南浔资料](https://sjfw.mct.gov.cn/site/dataservice/culdetails?curId=10&id=34889)、[嘉兴市西塘相关规划资料](https://jsj.jiaxing.gov.cn/module/download/downfile.jsp?classid=0&filename=cd0d550c2e1140a487d67e57796f9a34.pdf) |
-| 浙东（宁波；绍兴待补独立来源） | 地方民居色彩、材料、街巷与院落 | 仅列候选：[宁波市住建局传统村落建设指引](https://zjw.ningbo.gov.cn/module/download/downfile.jsp?classid=0&filename=4f2191f7ef9c4b149af1ed6b3747c768.pdf) |
-| 扬州—运河沿线 | 商业街巷、宅院、会馆与运河城市关系 | 仅列候选：[江苏省政府扬州街巷与宅居资料](https://www.jiangsu.gov.cn/art/2025/4/26/art_33718_11553099.html) |
-| 上海松江 | 历史街区、地方宅居及其与江南水乡的联系 | 仅列候选：[上海市政府松江资料](https://www.shanghai.gov.cn/songjiang/index.html) |
-
-只有在补齐适用地区、建筑类型、文献依据和反例/边界后，候选主题才进入新的知识库版本；是否进一步连接到参数和生成器需要单独验证，不能由资料目录自动推导。
+原投影文件及其本地预览不会复制进知识库或由规则修改。文件视觉上可见的色彩、体量与屋面分层只能作为个人设计参考。

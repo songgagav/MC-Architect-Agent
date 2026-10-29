@@ -67,15 +67,18 @@ def test_mcp_stdio_lists_strict_tools_and_creates_a_project_module(tmp_path: Pat
                     knowledge = await session.call_tool(
                         "list_knowledge_rules",
                         {
-                            "region": "cn.anhui.south.huizhou",
-                            "building_type": "residential_building",
+                            "region": "huizhou_core",
+                            "building_type": "traditional_village",
                             "evidence_kind": "literature_fact",
                         },
                     )
                     assert knowledge.isError is False
                     knowledge_text = "\n".join(item.text for item in knowledge.content if hasattr(item, "text"))
-                    assert "hui-materials-and-gable-decoration" in knowledge_text
-                    assert "https://www.huangshan.gov.cn/zjhs/rwhz/hpjz/8294057.html" in knowledge_text
+                    assert "hui-village-layout-and-architecture" in knowledge_text
+                    assert '"verification_level": "primary_source_full_text"' in knowledge_text
+                    assert '"status": "active"' in knowledge_text
+                    assert "Outstanding Universal Value" in knowledge_text
+                    assert "https://whc.unesco.org/en/list/1002/" in knowledge_text
                     assert not (tmp_path / "workspace").exists()
                     extra_argument = await session.call_tool(
                         "create_project",

@@ -48,6 +48,7 @@ def test_knowledge_query_returns_exact_region_rule_with_citation_without_workspa
         region="cn.anhui.south.huizhou",
         building_type="residential_building",
         evidence_kind="literature_fact",
+        knowledge_version=2,
     )
 
     assert result["knowledge_base_version"] == 2
@@ -55,13 +56,16 @@ def test_knowledge_query_returns_exact_region_rule_with_citation_without_workspa
         "region": "cn.anhui.south.huizhou",
         "building_type": "residential_building",
         "evidence_kind": "literature_fact",
-        "knowledge_version": None,
+        "knowledge_version": 2,
     }
     assert [rule["rule_id"] for rule in result["rules"]] == ["hui-materials-and-gable-decoration"]
     rule = result["rules"][0]
     assert rule["confidence"] == "medium"
     assert rule["source"]["locator"] == "https://www.huangshan.gov.cn/zjhs/rwhz/hpjz/8294057.html"
-    site_rules = service.list_knowledge_rules(region="cn.anhui.south.huangshan.yixian.xidi-hongcun")
+    site_rules = service.list_knowledge_rules(
+        region="cn.anhui.south.huangshan.yixian.xidi-hongcun",
+        knowledge_version=2,
+    )
     assert {rule["source_id"] for rule in site_rules["rules"]} == {"unesco.xidi-hongcun.ouval"}
     assert not (tmp_path / "workspace").exists()
 

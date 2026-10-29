@@ -89,6 +89,15 @@ class ProjectToolService:
                         "source_type": source.source_type,
                         "title": source.title,
                         "locator": source.locator,
+                        "publisher_or_author": source.publisher_or_author,
+                        "publication_date": source.publication_date,
+                        "date_note": source.date_note,
+                        "url": source.url,
+                        "doi": source.doi,
+                        "isbn": source.isbn,
+                        "section_or_page": source.section_or_page,
+                        "verification_level": source.verification_level,
+                        "accessed_date": source.accessed_date,
                     },
                     "applicable_regions": list(rule.applicable_regions),
                     "building_types": list(rule.building_types),
@@ -97,6 +106,8 @@ class ProjectToolService:
                     "confidence": rule.confidence.value,
                     "scope": rule.scope,
                     "statement": rule.statement,
+                    "verification_level": rule.verification_level,
+                    "status": rule.status,
                 }
                 for rule in rules
                 for source in (knowledge.sources[rule.source_id],)

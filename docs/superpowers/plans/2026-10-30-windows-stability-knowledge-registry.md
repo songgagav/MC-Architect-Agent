@@ -53,7 +53,7 @@
 - [x] Implement fail-closed path checks and explicit deterministic state transforms.
 - [x] Update CI to required Windows + optional Ubuntu, install `[dev,mcp]`, and force UTF-8; verify the MCP stdio protocol test is not skipped.
 - [x] Re-run generation precedence, README fixture, path, state-transform, MCP, and full pytest suite.
-- [ ] Commit the stability/CI deliverable separately.
+- [x] Commit the stability/CI deliverable separately.
 
 ### Task 2: Versioned knowledge sources, rules, and region profiles
 
@@ -68,12 +68,12 @@
 - Add immutable `RegionProfile` records and `KnowledgeBase.regions`; `rules_for` matches exact region IDs and returns verified active rules by default.
 - `load_knowledge_base(version=None)` discovers v3; explicit versions 1 and 2 remain loadable.
 
-- [ ] Add failing tests for complete citation metadata, exact region filtering, two active profiles, catalog-only profiles, and pending-rule exclusion.
-- [ ] Verify the new tests fail against current v2 behavior.
-- [ ] Add v3 JSON and a loader that accepts split source/rule/profile files while retaining legacy v1/v2 combined files.
-- [ ] Populate rules only from verified UNESCO pages or code/user records; label municipality pages blocked from full-text verification as pending, and exclude them from normal active queries.
-- [ ] Document source locators, dates as published or explicitly unstated, access date, confidence, profile scope, and unresolved evidence. Do not register unverified dimensions.
-- [ ] Run knowledge, regional filter, MCP knowledge protocol, and legacy-version tests.
+- [x] Add failing tests for complete citation metadata, exact region filtering, two active profiles, catalog-only profiles, and pending-rule exclusion.
+- [x] Verify the new tests fail against current v2 behavior.
+- [x] Add v3 JSON and a loader that accepts split source/rule/profile files while retaining legacy v1/v2 combined files.
+- [x] Populate rules only from verified UNESCO pages or code/user records; label municipality pages blocked from full-text verification as pending, and exclude them from normal active queries.
+- [x] Document source locators, dates as published or explicitly unstated, access date, confidence, profile scope, and unresolved evidence. Do not register unverified dimensions.
+- [x] Run knowledge, regional filter, MCP knowledge protocol, and legacy-version tests.
 - [ ] Commit the knowledge deliverable separately.
 
 ### Task 3: Parameter provenance and hall/corridor asset registry

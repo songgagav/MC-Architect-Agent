@@ -19,7 +19,7 @@ from jiangnan_agent.generators.hall import HallParameters
 def test_knowledge_rules_keep_source_scope_and_evidence_distinct() -> None:
     knowledge = load_knowledge_base()
 
-    assert knowledge.version == 2
+    assert knowledge.version == 3
     assert {rule.evidence_kind for rule in knowledge.rules} >= {
         EvidenceKind.LITERATURE_FACT,
         EvidenceKind.MINECRAFT_ADAPTATION,
@@ -27,6 +27,20 @@ def test_knowledge_rules_keep_source_scope_and_evidence_distinct() -> None:
     }
     assert all(rule.source_id in knowledge.sources for rule in knowledge.rules)
     assert all(rule.applicable_regions and rule.building_types and rule.scope for rule in knowledge.rules)
+
+
+def test_knowledge_v1_v2_compatibility_and_v3_default_are_preserved() -> None:
+    default = load_knowledge_base()
+    version_one = load_knowledge_base(1)
+    version_two = load_knowledge_base(2)
+    version_three = load_knowledge_base(3)
+
+    assert default.version == 3
+    assert version_one.version == 1 and not version_one.regions
+    assert version_two.version == 2 and not version_two.regions
+    assert version_three.version == 3 and version_three.regions
+    assert version_two.rules_for(region="cn.anhui.south.huizhou")
+    assert not version_three.rules_for(region="jiaxing_huzhou_water_towns")
 
 
 def test_knowledge_v1_remains_immutable_and_v2_rules_are_scoped_to_huizhou() -> None:
@@ -52,6 +66,62 @@ def test_knowledge_v1_remains_immutable_and_v2_rules_are_scoped_to_huizhou() -> 
         building_type="residential_building",
     )
     assert not version_two.rules_for(region="cn.zhejiang.jiaxing.xitang")
+
+
+def test_knowledge_v3_activates_only_huizhou_and_suzhou_profiles() -> None:
+    knowledge = load_knowledge_base(3)
+    active = {region_id for region_id, profile in knowledge.regions.items() if profile.status == "active"}
+    catalog_only = {
+        region_id for region_id, profile in knowledge.regions.items() if profile.status == "catalog_only"
+    }
+
+    assert knowledge.version == 3
+    assert active == {"huizhou_core", "jiangnan_suzhou"}
+    assert catalog_only >= {
+        "jiaxing_huzhou_water_towns",
+        "ningbo_east_zhejiang",
+        "yangzhou_canal",
+        "shanghai_songjiang",
+    }
+    assert knowledge.rules_for(region="huizhou_core")
+    assert knowledge.rules_for(region="jiangnan_suzhou")
+    assert not knowledge.rules_for(region="jiaxing_huzhou_water_towns")
+    assert not knowledge.rules_for(region="unregistered_region")
+
+
+def test_knowledge_v3_records_complete_source_and_rule_verification_metadata() -> None:
+    knowledge = load_knowledge_base(3)
+
+    assert knowledge.sources
+    for source in knowledge.sources.values():
+        assert source.publisher_or_author
+        assert source.date_note
+        assert source.section_or_page
+        assert source.verification_level
+        assert source.accessed_date
+        assert source.locator or source.url or source.doi or source.isbn
+    for rule in knowledge.rules:
+        assert rule.verification_level
+        assert rule.status in {"active", "pending_verification"}
+        assert rule.applicable_regions
+        source = knowledge.sources[rule.source_id]
+        assert source.title
+        if rule.evidence_kind is EvidenceKind.LITERATURE_FACT and rule.status == "active":
+            assert source.url or source.doi or source.isbn
+            assert source.publication_date or "not stated" in source.date_note.lower()
+
+
+def test_knowledge_v3_pending_rules_are_hidden_unless_explicitly_requested() -> None:
+    knowledge = load_knowledge_base(3)
+    pending = [rule for rule in knowledge.rules if rule.status == "pending_verification"]
+
+    assert pending
+    assert all(rule.verification_level == "pending_full_text" for rule in pending)
+    assert not any(rule.status == "pending_verification" for rule in knowledge.rules_for(region="huizhou_core"))
+    assert any(
+        rule.status == "pending_verification"
+        for rule in knowledge.rules_for(region="huizhou_core", include_pending=True)
+    )
 
 
 def test_asset_registry_describes_existing_hall_and_corridor_anchors() -> None:

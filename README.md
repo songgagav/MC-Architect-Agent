@@ -109,9 +109,9 @@ jiangnan generate --project examples\three_bay_hall.jap.json
 
 厅堂与直廊的新模块通过版本化资产登记创建，执行仍映射到现有 `HallParameters`、`CorridorParameters` 和生成器。参数 schema 将独立输入、派生结果、硬约束与软提示分开；冲突字段或不支持版本会明确报错。模块工程记录资产、知识库和参数 schema 版本，原有无元数据的工程仍可读取。
 
-当前知识库为 v2：保留 v1 原始记录，并增加有来源、适用地域和范围说明的徽州文献条目。当前资产清单为 v2，厅堂与直廊资产 v2 仍复用参数 schema v1 和现有方块生成器；对相同参数，方块结果保持一致。新生成模块记录知识库 v2，旧工程仍可按其记录的资产/知识版本重新生成。知识条目按地区标签精确筛选，不推断地区层级。
+当前知识库默认为 v3，来源、规则和地域配置分别存放；v1/v2 可显式读取。只有 `huizhou_core`（西递、宏村的村落级官方描述）和 `jiangnan_suzhou`（苏州古典园林的园林级官方描述）启用。其他候选地域为 `catalog_only`；未取得全文和定位的地方资料及对应规则标为待核查，并从普通查询中隐藏。当前资产清单仍为 v2，厅堂与直廊资产 v2 复用参数 schema v1 和现有方块生成器；相同输入的方块结果保持一致。知识规则按地域 ID 精确筛选，不推断地区层级，也不把描述性史料转换成未证实的尺寸。
 
-可复现的三开间参数样例见 `examples/hall_v1_parameters.json`（参数 schema v1）。`bay_spacing` 映射到现有参数 `bay_width`；屋顶断面 v1 仅支持生成器当前实现的对称双坡。已登记的徽州资料用于说明有出处的定性事实，不提供未经核实的传统尺寸；用户提供的 `.litematic` 只登记为视觉偏好参考，不作为历史证据。其他候选地域及其“尚未接入”状态见 [`docs/knowledge-regions.md`](docs/knowledge-regions.md)。
+可复现的三开间参数样例见 `examples/hall_v1_parameters.json`（参数 schema v1）。`bay_spacing` 映射到现有参数 `bay_width`；屋顶断面 v1 仅支持生成器当前实现的对称双坡。地域范围、来源核查等级和待核查记录见 [`docs/knowledge-regions.md`](docs/knowledge-regions.md)。用户 `.litematic` 只登记为视觉偏好参考，不作为历史证据。
 
 ## 三维预览与修改对比
 
