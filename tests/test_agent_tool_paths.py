@@ -25,6 +25,29 @@ def test_project_access_resolves_confined_relative_paths(tmp_path: Path) -> None
     assert access.resolve_export_path("sample.schem") == (export_root / "sample.schem").resolve()
 
 
+def test_export_path_normalizes_windows_extended_prefix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+
+    if os.name != "nt":
+        pytest.skip("Windows extended path prefixes are a Windows runtime behavior")
+    access = ProjectAccess(tmp_path)
+    access.exports_root.mkdir(parents=True)
+    expected = str((access.exports_root / "sample.schem").resolve())
+    real_resolve = Path.resolve
+
+    def resolve_with_extended_prefix(path: Path, strict: bool = False) -> Path:
+        resolved = real_resolve(path, strict=strict)
+        if path.name == "sample.schem":
+            return Path("\\\\?\\" + str(resolved))
+        return resolved
+
+    monkeypatch.setattr(Path, "resolve", resolve_with_extended_prefix)
+
+    assert str(access.resolve_export_path("sample.schem")) == expected
+
+
 @pytest.mark.parametrize(
     "relative_path",
     (

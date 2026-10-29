@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path, PureWindowsPath
 from typing import Literal
 
@@ -52,10 +53,26 @@ class ProjectAccess:
 
         try:
             resolved = (allowed_root / relative_path).resolve()
-            resolved.relative_to(allowed_root)
+            resolved_for_check = ProjectAccess._strip_windows_extended_prefix(resolved)
+            allowed_root_for_check = ProjectAccess._strip_windows_extended_prefix(allowed_root)
+            resolved_for_check.relative_to(allowed_root_for_check)
         except (OSError, RuntimeError, ValueError) as exc:
             raise ValueError("path resolves outside its allowed workspace directory") from exc
-        return resolved
+        return resolved_for_check
+
+    @staticmethod
+    def _strip_windows_extended_prefix(path: Path) -> Path:
+        """Normalize equivalent Win32 extended paths before lexical containment checks."""
+
+        if os.name != "nt":
+            return path
+        raw_path = str(path).replace("/", "\\")
+        unc_prefix = "\\\\?\\UNC\\"
+        if raw_path.startswith(unc_prefix):
+            raw_path = "\\\\" + raw_path[len(unc_prefix) :]
+        elif raw_path.startswith("\\\\?\\"):
+            raw_path = raw_path[4:]
+        return Path(raw_path)
 
     @staticmethod
     def _is_unsafe_relative_path(relative_path: str) -> bool:
