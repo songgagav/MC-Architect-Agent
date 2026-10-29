@@ -54,6 +54,7 @@
 - 可按同一资产 ID 登记新文件版本；相同文件 SHA 会复用 `reference_files` 与聚合统计。相同资产 ID 和同一 SHA 再导入是幂等操作；若元数据不一致，会明确报错。
 - 预览文件通过 `library previews` 关联。完整性校验会检查原始投影 SHA-256 和预览路径是否存在。
 - 删除外部资源不会破坏历史元数据，但 `library verify` 会报告缺失文件。SQLite 不会尝试恢复或替换用户文件。
+- `library init` 检测到旧解析器版本时，会为每个去重文件 SHA 读取至少一个 SHA-256 匹配的原始投影，并在事务中重建统计与 DataVersion provenance。若所有副本都缺失、校验和变化或无法解析，初始化会明确报错；可用 `library verify --asset-id <id>` 独立核查每个资产登记的路径，缺失或哈希不符会抛出明确异常，避免一个失效副本掩盖其他可用副本。
 
 ## Litematic 导入器
 
@@ -61,7 +62,7 @@
 
 区域的 `Position` 与正负 `Size` 原样保留在解析模型中，迭代坐标按 Region 方向还原；完整原始状态仍由源文件和 SHA-256 保全。统计过程流式迭代，不创建逐方块 SQLite 行。报告包括占用方块包围盒、尺寸、状态/材料计数、Y 层统计、水平截面范围和覆盖率。材料 ID 统计把 stair 等方块状态变体聚合到同一方块名。
 
-为限制本地文件导致的资源消耗，投影文件与解压后的 NBT 大小各限制为 128 MiB；单个 Region 及整份投影总计最多分析 8,388,608 个体素位置。超过上限会明确拒绝；体积检查会在复制 packed 状态和扫描方块前生效。 Gzip NBT input is fully consumed so its CRC and trailer are checked.[LitematicaSchematic.java](https://github.com/maruohon/litematica/blob/27efd02b5f691a8999f1ac3854269f9fa202b5ca/src/main/java/litematica/schematic/LitematicaSchematic.java)、[TightLongBackedIntArray.java](https://github.com/maruohon/litematica/blob/27efd02b5f691a8999f1ac3854269f9fa202b5ca/src/main/java/litematica/schematic/container/TightLongBackedIntArray.java)、[SchematicRegion.java](https://github.com/maruohon/litematica/blob/27efd02b5f691a8999f1ac3854269f9fa202b5ca/src/main/java/litematica/schematic/SchematicRegion.java)。
+为限制本地文件导致的资源消耗，投影文件与解压后的 NBT 大小各限制为 128 MiB；单个 Region 及整份投影总计最多分析 8,388,608 个体素位置。超过上限会明确拒绝；体积检查会在复制 packed 状态和扫描方块前生效。[LitematicaSchematic.java](https://github.com/maruohon/litematica/blob/27efd02b5f691a8999f1ac3854269f9fa202b5ca/src/main/java/litematica/schematic/LitematicaSchematic.java)、[TightLongBackedIntArray.java](https://github.com/maruohon/litematica/blob/27efd02b5f691a8999f1ac3854269f9fa202b5ca/src/main/java/litematica/schematic/container/TightLongBackedIntArray.java)、[SchematicRegion.java](https://github.com/maruohon/litematica/blob/27efd02b5f691a8999f1ac3854269f9fa202b5ca/src/main/java/litematica/schematic/SchematicRegion.java)。
 
 文件级与每个 Region 的 DataVersion 都参与兼容判断；只要其中有低于 4325 的版本就标为 `parsed_older_data_version_requires_review`，有高于 4325 的版本则标记为较新版本不兼容。各 Region 版本保存在资产 provenance 中，不会由文件级版本覆盖。读取成功不代表游戏可无损载入；当前不调用 Minecraft DataFixer、不升级旧方块状态，也不声称经过 1.21.5/WorldEdit 实测。
 
@@ -126,9 +127,9 @@ jiangnan library backup --output workspace\library\architect_library-backup.sqli
 
 ## 测试与验收状态
 
-- Windows Python 3.12 环境：完整测试 `284 passed`；MCP stdio 协议回归 `1 passed`。
+- Windows Python 3.12 环境：完整测试 `288 passed`；MCP stdio 协议回归 `1 passed`。
 - Wheel 构建成功；包内检查确认包含 DB migrations、模块目录、两份风格 JSON 和通用参数 JSON，并且未打包用户 `Template/` 或 `workspace/`。
-- 新增测试覆盖迁移/重复初始化、知识快照版本与哈希、地域隔离、外键和 ID 约束、参数来源/状态、模块/参数/风格版本不可变、固定风格引用版本、SHA 去重、资产新版本、材料/高度层统计、状态属性保留、packed array 跨 long 解码、零值首 word、多 Region/负尺寸、root/Region 版本差异、资源上限、压缩/未压缩 NBT、损坏文件、预览关联、事务回滚和 SQLite 备份。
+- 新增测试覆盖迁移/重复初始化、知识快照版本与哈希、地域隔离、外键和 ID 约束、参数来源/状态、模块/参数/风格版本不可变、固定和首次解析风格引用版本、SHA 去重、解析器升级重算和共享文件坏路径报告、资产新版本、材料/高度层统计、状态属性保留、packed array 跨 long 解码、零值首 word、多 Region/负尺寸、root/Region 版本差异、资源上限、压缩/未压缩 NBT、损坏文件、预览关联、事务回滚和 SQLite 备份。
 - 新增 CLI 覆盖库初始化、地域/参数查询；既有测试继续覆盖 Assembly/generate 裁定及工程接口不变。
 - 两个真实用户模板成功导入；尺寸、占用方块数与 SHA-256 已和既有本地报告对照。真实 Minecraft/WorldEdit 的 1.21.5 放置验收仍待进行。
 - DB 路径和用户预览图保持本地未跟踪；知识、参数、模块和风格 JSON 才是提交内容。

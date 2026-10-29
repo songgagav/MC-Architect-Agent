@@ -30,7 +30,112 @@ class LibraryService:
     def initialize(self) -> int:
         version = self.database.initialize()
         self._synchronize_catalogs()
+        self._upgrade_reference_analyses()
         return version
+
+    def _upgrade_reference_analyses(self) -> None:
+        """Recompute stored aggregates when a file was analyzed by an older parser."""
+
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                """SELECT rf.file_id, rf.sha256, rf.parser_version AS file_parser_version,
+                          ra.asset_id, ra.version, ra.source_file, ra.parser_version AS asset_parser_version
+                   FROM reference_files rf JOIN reference_assets ra USING(file_id)
+                   WHERE rf.parser_version != ? OR ra.parser_version != ?
+                   ORDER BY rf.file_id, ra.asset_id, ra.version""",
+                (PARSER_VERSION, PARSER_VERSION),
+            ).fetchall()
+        groups: dict[int, list[sqlite3.Row]] = {}
+        for row in rows:
+            groups.setdefault(int(row["file_id"]), []).append(row)
+        for file_id, assets in groups.items():
+            expected_sha = str(assets[0]["sha256"])
+            parsed: tuple[Any, Any] | None = None
+            failure: Exception | None = None
+            for asset in assets:
+                path = self._resolve_source_path(str(asset["source_file"]))
+                if not path.is_file():
+                    continue
+                try:
+                    actual_sha, byte_size = _sha256(path)
+                    if actual_sha != expected_sha:
+                        failure = AssetIntegrityError(
+                            f"SHA-256 mismatch while upgrading {asset['asset_id']}@{asset['version']}: "
+                            f"expected {expected_sha}, got {actual_sha}"
+                        )
+                        continue
+                    document = read_litematic(path)
+                    analysis = analyze_litematic(document)
+                    final_sha, final_size = _sha256(path)
+                    if final_sha != actual_sha or final_size != byte_size:
+                        raise AssetIntegrityError("reference Litematic changed while its analysis was upgraded")
+                    parsed = (document, analysis)
+                    break
+                except (AssetIntegrityError, ValueError) as exc:
+                    failure = exc
+            if parsed is None:
+                if failure is not None:
+                    raise AssetIntegrityError(
+                        f"could not upgrade reference analysis for file SHA-256 {expected_sha}: {failure}"
+                    ) from failure
+                paths = ", ".join(str(self._resolve_source_path(str(asset["source_file"]))) for asset in assets)
+                raise AssetIntegrityError(
+                    f"source file is missing while upgrading reference analysis for {expected_sha}: {paths}"
+                )
+            document, analysis = parsed
+            inventory = {
+                "file": document.minecraft_data_version,
+                "regions": {region.name: region.minecraft_data_version for region in document.regions},
+            }
+            validation_status = _validation_status(analysis.compatibility_status)
+            with self.database.transaction() as connection:
+                connection.execute(
+                    "DELETE FROM reference_material_counts WHERE file_id = ?", (file_id,)
+                )
+                connection.execute(
+                    "DELETE FROM reference_layer_counts WHERE file_id = ?", (file_id,)
+                )
+                for block_state, count in analysis.palette_counts.items():
+                    connection.execute(
+                        "INSERT INTO reference_material_counts(file_id, block_state, block_count) VALUES (?, ?, ?)",
+                        (file_id, block_state, count),
+                    )
+                for y, states in analysis.layer_material_counts.items():
+                    for block_state, count in states.items():
+                        connection.execute(
+                            """INSERT INTO reference_layer_counts(file_id, y, block_state, block_count)
+                               VALUES (?, ?, ?, ?)""",
+                            (file_id, y, block_state, count),
+                        )
+                connection.execute(
+                    "UPDATE reference_files SET minecraft_data_version = ?, parser_version = ? WHERE file_id = ?",
+                    (document.minecraft_data_version, PARSER_VERSION, file_id),
+                )
+                for asset in assets:
+                    row = connection.execute(
+                        "SELECT provenance_json FROM reference_assets WHERE asset_id = ? AND version = ?",
+                        (asset["asset_id"], asset["version"]),
+                    ).fetchone()
+                    provenance = _loads(row["provenance_json"])
+                    provenance["data_version_inventory"] = inventory
+                    connection.execute(
+                        """UPDATE reference_assets SET dimensions_json = ?, block_count = ?,
+                                  block_palette_json = ?, bounding_box_json = ?, validation_status = ?,
+                                  author = ?, provenance_json = ?, parser_version = ?
+                           WHERE asset_id = ? AND version = ?""",
+                        (
+                            _json(list(analysis.dimensions)),
+                            analysis.block_count,
+                            _json(dict(analysis.palette_counts)),
+                            _json([list(analysis.bounding_box[0]), list(analysis.bounding_box[1])]),
+                            validation_status,
+                            document.author or "unknown",
+                            _json(provenance),
+                            PARSER_VERSION,
+                            asset["asset_id"],
+                            asset["version"],
+                        ),
+                    )
 
     def _synchronize_catalogs(self) -> None:
         knowledge = load_knowledge_base()
@@ -399,12 +504,21 @@ class LibraryService:
                 profile_json,
             ),
         )
-        connection.execute(
-            "DELETE FROM style_reference_assets WHERE profile_id = ? AND profile_version = ?",
-            (profile_id, version),
-        )
         for asset_id in references:
             pinned_version = reference_versions.get(asset_id)
+            existing_link = connection.execute(
+                """SELECT asset_version FROM style_reference_assets
+                   WHERE profile_id = ? AND profile_version = ? AND asset_id = ?""",
+                (profile_id, version, asset_id),
+            ).fetchone()
+            if existing_link is not None:
+                if pinned_version is None or int(existing_link["asset_version"]) == pinned_version:
+                    continue
+                connection.execute(
+                    """DELETE FROM style_reference_assets
+                       WHERE profile_id = ? AND profile_version = ? AND asset_id = ?""",
+                    (profile_id, version, asset_id),
+                )
             if pinned_version is None:
                 row = connection.execute(
                     "SELECT version FROM reference_assets WHERE asset_id = ? ORDER BY version DESC LIMIT 1",
@@ -472,11 +586,6 @@ class LibraryService:
         rights.setdefault("license", "unknown")
         rights.setdefault("redistribution", "not_granted")
         rights.setdefault("note", "No redistribution permission is inferred from possession of the local file.")
-        compatibility_to_validation = {
-            "target": "parsed_target_data_version",
-            "older_than_target": "parsed_older_data_version_requires_review",
-            "newer_than_target": "parsed_newer_data_version_incompatible_with_target",
-        }
         stored_dimensions = _json(list(analysis.dimensions))
         stored_bounds = _json([list(analysis.bounding_box[0]), list(analysis.bounding_box[1])])
         now = _utc_now()
@@ -556,7 +665,7 @@ class LibraryService:
                     _json(dict(analysis.palette_counts)),
                     stored_bounds,
                     _json(tags),
-                    compatibility_to_validation[analysis.compatibility_status],
+                    _validation_status(analysis.compatibility_status),
                     document.author or "unknown",
                     _json(provenance),
                     _json(rights),
@@ -983,13 +1092,23 @@ class LibraryService:
             if asset_id not in profile.get("reference_asset_ids", []):
                 continue
             pinned_version = profile.get("reference_asset_versions", {}).get(asset_id)
-            if pinned_version is not None and int(pinned_version) != asset_version:
-                continue
-            connection.execute(
-                """DELETE FROM style_reference_assets
+            existing_link = connection.execute(
+                """SELECT asset_version FROM style_reference_assets
                    WHERE profile_id = ? AND profile_version = ? AND asset_id = ?""",
                 (style["profile_id"], style["version"], asset_id),
-            )
+            ).fetchone()
+            if existing_link is not None and (
+                pinned_version is None or int(existing_link["asset_version"]) == int(pinned_version)
+            ):
+                continue
+            if pinned_version is not None and int(pinned_version) != asset_version:
+                if existing_link is not None:
+                    connection.execute(
+                        """DELETE FROM style_reference_assets
+                           WHERE profile_id = ? AND profile_version = ? AND asset_id = ?""",
+                        (style["profile_id"], style["version"], asset_id),
+                    )
+                continue
             connection.execute(
                 """INSERT INTO style_reference_assets(
                        profile_id, profile_version, asset_id, asset_version, reference_role
@@ -1085,6 +1204,18 @@ def _json(value: object) -> str:
 
 def _loads(value: str) -> Any:
     return json.loads(value)
+
+
+def _validation_status(compatibility_status: str) -> str:
+    statuses = {
+        "target": "parsed_target_data_version",
+        "older_than_target": "parsed_older_data_version_requires_review",
+        "newer_than_target": "parsed_newer_data_version_incompatible_with_target",
+    }
+    try:
+        return statuses[compatibility_status]
+    except KeyError as exc:
+        raise ValueError(f"unknown Litematic compatibility status: {compatibility_status!r}") from exc
 
 
 def _nonempty(value: object, field: str) -> str:

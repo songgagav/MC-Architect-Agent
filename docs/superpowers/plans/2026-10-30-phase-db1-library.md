@@ -86,7 +86,9 @@
 
 - [x] Import both available local templates, compare dimensions/counts/SHA with existing conversion records, register existing preview paths, and leave source binaries untracked.
 - [x] Write schema, CLI, backup, rights, regional status, and style semantics documentation.
-- [x] Run full pytest and MCP stdio protocol test on the Windows virtual environment (284 passed; MCP protocol 1 passed).
+- [x] Run full pytest and MCP stdio protocol test on the Windows virtual environment (288 passed; MCP protocol 1 passed).
+- [x] Upgrade the real local database from parser 1.0 to 1.1 from SHA-matched source files; verify both reference assets and same-SHA reimport idempotency.
+- [x] Regress unpinned style source-version stability when a newer reference version is imported.
 - [x] Run wheel/package-data check; finish staged diff check after staging the explicit source files.
 - [ ] Push the DB-1 branch and verify the required Windows CI run before review.
 - [ ] Report actual imports, test/CI evidence, unverified game-world checks, and follow-up work; stop at DB-1.

@@ -105,6 +105,106 @@ def test_import_marks_any_old_region_data_version_for_review_and_records_invento
 
     assert asset.validation_status == "parsed_older_data_version_requires_review"
     assert asset.provenance["data_version_inventory"] == {"file": 4325, "regions": {"older": 3465}}
+
+
+def test_initialize_reanalyzes_old_parser_records_and_same_sha_reimport_is_idempotent(tmp_path: Path) -> None:
+    source = _write_litematic(
+        tmp_path / "references" / "mixed-versions.litematic",
+        regions={"older": ((0, 0, 0), (1, 1, 1), [1], 2)},
+        data_version=4325,
+        region_data_versions={"older": 3465},
+    )
+    service = LibraryService(LibraryDatabase(tmp_path / "library.sqlite3"), project_root=tmp_path)
+    service.initialize()
+    asset = service.import_litematic(source, asset_id="reference.mixed-versions", name="Mixed versions")
+    stale_provenance = dict(asset.provenance)
+    stale_provenance.pop("data_version_inventory")
+    with service.database.transaction() as connection:
+        connection.execute("UPDATE reference_files SET parser_version = '1.0'")
+        connection.execute(
+            "UPDATE reference_assets SET parser_version = '1.0', validation_status = 'parsed_target_data_version', provenance_json = ?",
+            (json.dumps(stale_provenance, ensure_ascii=False, sort_keys=True, separators=(",", ":")),),
+        )
+
+    service.initialize()
+    upgraded = service.get_reference("reference.mixed-versions")
+    repeated = service.import_litematic(source, asset_id="reference.mixed-versions", name="Mixed versions")
+
+    assert upgraded.parser_version != "1.0"
+    assert upgraded.validation_status == "parsed_older_data_version_requires_review"
+    assert upgraded.provenance["data_version_inventory"] == {"file": 4325, "regions": {"older": 3465}}
+    assert repeated.version == upgraded.version == 1
+
+
+@pytest.mark.parametrize(
+    ("source_issue", "expected_error"),
+    [("missing", "reference file is missing"), ("changed", "SHA-256 mismatch")],
+)
+def test_parser_upgrade_uses_one_valid_copy_and_reports_other_bad_asset_paths(
+    tmp_path: Path, source_issue: str, expected_error: str
+) -> None:
+    source = _write_litematic(
+        tmp_path / "references" / "shared-a.litematic",
+        regions={"west": ((0, 0, 0), (1, 1, 1), [1], 2)},
+    )
+    second_source = tmp_path / "references" / "shared-b.litematic"
+    second_source.write_bytes(source.read_bytes())
+    service = LibraryService(LibraryDatabase(tmp_path / "library.sqlite3"), project_root=tmp_path)
+    service.initialize()
+    service.import_litematic(source, asset_id="reference.shared-a", name="Shared A")
+    service.import_litematic(second_source, asset_id="reference.shared-b", name="Shared B")
+
+    with service.database.transaction() as connection:
+        if source_issue == "missing":
+            connection.execute(
+                "UPDATE reference_assets SET source_file = ? WHERE asset_id = 'reference.shared-b'",
+                ("references/not-present.litematic",),
+            )
+        else:
+            second_source.write_bytes(b"not the original Litematic")
+        connection.execute("UPDATE reference_files SET parser_version = '1.0'")
+        connection.execute("UPDATE reference_assets SET parser_version = '1.0'")
+
+    service.initialize()
+
+    assert service.get_reference("reference.shared-a").parser_version != "1.0"
+    assert service.get_reference("reference.shared-b").parser_version != "1.0"
+    assert service.verify_files("reference.shared-a")[0]["status"] == "ok"
+    with pytest.raises(AssetIntegrityError, match=expected_error):
+        service.verify_files("reference.shared-b")
+
+
+def test_unpinned_style_version_keeps_its_first_reference_link(tmp_path: Path) -> None:
+    first_source = _write_litematic(
+        tmp_path / "references" / "fangtang-v1.litematic",
+        regions={"west": ((0, 0, 0), (1, 1, 1), [1], 2)},
+    )
+    second_source = _write_litematic(
+        tmp_path / "references" / "fangtang-v2.litematic",
+        regions={"west": ((0, 0, 0), (1, 1, 1), [4], 5)},
+    )
+    service = LibraryService(LibraryDatabase(tmp_path / "library.sqlite3"), project_root=tmp_path)
+    service.initialize()
+    service.import_litematic(first_source, asset_id="reference.fangtang", name="Fangtang")
+    unpinned_style = {
+        "profile_id": "test.unpinned-style",
+        "version": 1,
+        "label": "First registration selects a source version",
+        "design_target_region_id": "huizhou_core",
+        "status": "draft",
+        "reference_asset_ids": ["reference.fangtang"],
+        "_definition_path": "styles/test-unpinned.json",
+    }
+    with service.database.transaction() as connection:
+        service._upsert_style(connection, unpinned_style)
+
+    service.import_litematic(second_source, asset_id="reference.fangtang", name="Fangtang")
+    with service.database.transaction() as connection:
+        service._upsert_style(connection, unpinned_style)
+
+    profile = service.get_style_profile("test.unpinned-style", require_references=True)
+    assert profile["resolved_reference_versions"] == {"reference.fangtang": 1}
+    assert profile["palette_candidates"]["reference.fangtang"][0]["block_state"] == "minecraft:stone"
     with pytest.raises(LibraryLookupError, match="unknown reference asset"):
         service.get_reference("reference.missing")
 
