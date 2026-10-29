@@ -110,7 +110,7 @@ def test_project_access_rejects_real_symlink_escape(tmp_path: Path) -> None:
             pytest.skip("the current Windows account cannot create a directory symlink or junction")
 
     with pytest.raises(ValueError, match="outside"):
-        access.resolve_project_path(r"linked\escape.jap.json", operation="create")
+        access.resolve_project_path("linked/escape.jap.json", operation="create")
 
 
 def test_project_access_rejects_symlink_loop(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -128,7 +128,7 @@ def test_project_access_rejects_symlink_loop(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr(Path, "resolve", resolve_with_loop)
 
     with pytest.raises(ValueError, match="outside"):
-        access.resolve_project_path(r"loop\escape.jap.json", operation="create")
+        access.resolve_project_path("loop/escape.jap.json", operation="create")
 
 
 def _create_windows_junction(link: Path, target: Path) -> bool:
