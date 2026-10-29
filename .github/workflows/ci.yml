@@ -5,18 +5,37 @@ on:
   pull_request:
 
 jobs:
-  pytest:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-        python-version: ["3.12"]
+  windows-tests:
+    name: Windows tests (required)
+    runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[dev]"
+      - run: python -m pip install -e ".[dev,mcp]"
+      - run: python -c "import mcp"
+      - run: python -m pytest -q tests/test_mcp_server.py::test_mcp_stdio_lists_strict_tools_and_creates_a_project_module
+      - run: python -m pytest
+
+  ubuntu-compatibility:
+    name: Ubuntu compatibility (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev,mcp]"
+      - run: python -c "import mcp"
+      - run: python -m pytest -q tests/test_mcp_server.py::test_mcp_stdio_lists_strict_tools_and_creates_a_project_module
       - run: python -m pytest

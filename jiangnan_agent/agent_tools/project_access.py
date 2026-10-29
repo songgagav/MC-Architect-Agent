@@ -44,11 +44,9 @@ class ProjectAccess:
     def _resolve_confined(relative_path: str, allowed_root: Path, suffix: str) -> Path:
         if not isinstance(relative_path, str) or not relative_path.strip():
             raise ValueError("path must be a non-empty workspace-relative string")
-        windows_path = PureWindowsPath(relative_path)
-        if Path(relative_path).is_absolute() or windows_path.is_absolute() or windows_path.drive:
-            raise ValueError("absolute paths are not allowed")
-        if ".." in relative_path.replace("\\", "/").split("/"):
-            raise ValueError("parent traversal is not allowed")
+        issue = ProjectAccess._unsafe_relative_path_reason(relative_path)
+        if issue is not None:
+            raise ValueError(issue)
         if Path(relative_path).suffix.lower() != suffix:
             raise ValueError(f"path must use the {suffix} suffix")
 
@@ -58,3 +56,25 @@ class ProjectAccess:
         except (OSError, RuntimeError, ValueError) as exc:
             raise ValueError("path resolves outside its allowed workspace directory") from exc
         return resolved
+
+    @staticmethod
+    def _is_unsafe_relative_path(relative_path: str) -> bool:
+        """Classify native and Windows path anchors independent of host OS."""
+
+        return ProjectAccess._unsafe_relative_path_reason(relative_path) is not None
+
+    @staticmethod
+    def _unsafe_relative_path_reason(relative_path: str) -> str | None:
+        if not isinstance(relative_path, str) or not relative_path.strip():
+            return "path must be a non-empty workspace-relative string"
+        windows_path = PureWindowsPath(relative_path)
+        if (
+            Path(relative_path).is_absolute()
+            or windows_path.is_absolute()
+            or windows_path.drive
+            or windows_path.root
+        ):
+            return "absolute paths are not allowed"
+        if ".." in relative_path.replace("\\", "/").split("/"):
+            return "parent traversal is not allowed"
+        return None
