@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import fields
+from dataclasses import asdict, fields
 from collections.abc import Mapping
 
 from ..core.block import BlockState
@@ -17,6 +17,7 @@ from ..generators.hall import (
     generate_corridor,
     generate_hall,
 )
+from ..generators.roof_profiles import MaterialPalette
 from .model import ClearanceZone, ConnectionAnchor, Module
 
 _OPPOSITE = {"north": "south", "east": "west", "south": "north", "west": "east"}
@@ -25,11 +26,24 @@ _OPPOSITE = {"north": "south", "east": "west", "south": "north", "west": "east"}
 def _parameters_dict(parameters, defaults: Mapping[str, str]) -> dict[str, object]:
     values: dict[str, object] = {}
     for item in fields(parameters):
+        if item.name.startswith("_"):
+            continue
         value = getattr(parameters, item.name)
         if item.name == "materials":
             materials = dict(defaults)
             materials.update(value or {})
+            if parameters.material_palette is not None:
+                materials.pop("roof", None)
+                materials.pop("eaves", None)
             values[item.name] = materials
+        elif item.name in {"roof_profile", "eave_profile", "ridge_profile", "material_palette"}:
+            if value is None:
+                continue
+            values[item.name] = dict(value.roles) if isinstance(value, MaterialPalette) else asdict(value)
+        elif item.name == "roof_rise" and parameters.roof_profile is not None and not parameters._roof_rise_explicit:
+            continue
+        elif item.name == "eaves" and parameters.eave_profile is not None and not parameters._eaves_explicit:
+            continue
         else:
             values[item.name] = value
     return values

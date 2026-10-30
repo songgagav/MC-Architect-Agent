@@ -12,7 +12,20 @@ from types import MappingProxyType
 from typing import Any
 
 from ..assets.registry import get_asset
+from ..core.block import BlockState
 from ..generators.hall import CorridorParameters, HallParameters
+from ..generators.minecraft_materials import roof_material_shape, validate_roof_material_state
+from ..generators.roof_profiles import (
+    EaveProfile,
+    MaterialPalette,
+    RidgeProfile,
+    RoofPreset,
+    RoofProfile,
+    eave_profile_from_mapping as _eave_profile_from_mapping,
+    material_palette_from_mapping as _material_palette_from_mapping,
+    ridge_profile_from_mapping as _ridge_profile_from_mapping,
+    roof_profile_from_mapping as _roof_profile_from_mapping,
+)
 from ..knowledge import ConfidenceLevel, EvidenceKind, KnowledgeBase, load_knowledge_base
 
 
@@ -26,6 +39,50 @@ class ProvenanceCategory(StrEnum):
     SURVEY_DATA = "survey_data"
     DERIVED = "derived"
     MINECRAFT_ADAPTATION = "minecraft_adaptation"
+
+
+_ROOF_PRESET_FILE = Path(__file__).parent / "v3" / "roof_profiles.json"
+
+
+def list_roof_presets() -> tuple[str, ...]:
+    """Return stable IDs of the versioned Minecraft roof-creation presets."""
+
+    data = json.loads(_ROOF_PRESET_FILE.read_text(encoding="utf-8"))
+    if data.get("version") != 3:
+        raise ValueError("roof preset registry version mismatch")
+    presets = data.get("presets")
+    if not isinstance(presets, list):
+        raise ValueError("roof preset registry must contain a presets array")
+    ids = [item.get("preset_id") for item in presets if isinstance(item, Mapping)]
+    if len(ids) != len(presets) or any(not isinstance(item, str) or not item for item in ids):
+        raise ValueError("roof presets must have non-empty preset IDs")
+    if len(ids) != len(set(ids)):
+        raise ValueError("roof preset IDs must be unique")
+    return tuple(sorted(ids))
+
+
+def load_roof_preset(preset_id: str) -> RoofPreset:
+    """Load and validate one versioned Minecraft roof-creation preset."""
+
+    if not isinstance(preset_id, str) or not preset_id:
+        raise ValueError("preset_id must be a non-empty string")
+    data = json.loads(_ROOF_PRESET_FILE.read_text(encoding="utf-8"))
+    if data.get("version") != 3:
+        raise ValueError("roof preset registry version mismatch")
+    matches = [item for item in data.get("presets", []) if item.get("preset_id") == preset_id]
+    if not matches:
+        raise ValueError(f"unknown roof preset: {preset_id!r}")
+    item = matches[0]
+    try:
+        return RoofPreset(
+            preset_id=preset_id,
+            roof_profile=_roof_profile_from_mapping(item["roof_profile"]),
+            eave_profile=_eave_profile_from_mapping(item["eave_profile"]),
+            ridge_profile=_ridge_profile_from_mapping(item["ridge_profile"]),
+            material_palette=_material_palette_from_mapping(item["material_palette"]),
+        )
+    except KeyError as exc:
+        raise ValueError(f"roof preset {preset_id!r} is missing {exc.args[0]!r}") from exc
 
 
 def _freeze(value: object) -> object:
@@ -262,6 +319,13 @@ def _provided_top_level_parameters(schema: ParameterSchema, values: Mapping[str,
             raise ValueError("parameter names must be strings")
         if name == "derived":
             continue
+        if schema.version >= 3 and name == "materials" and isinstance(values[name], Mapping):
+            material_values = values[name]
+            if {"roof", "eaves"}.intersection(material_values):
+                result.add("material_palette")
+            if set(material_values) - {"roof", "eaves"}:
+                result.add("materials")
+            continue
         result.add(_top_level_parameter(schema, name))
     return result
 
@@ -437,7 +501,17 @@ def _validate_nested(schema: ParameterSchema, key: str, value: object) -> Mappin
     default = schema.defaults[key]
     if not isinstance(default, Mapping):
         raise ValueError(f"{key} is not an object parameter in this schema")
-    unknown = set(value) - set(default)
+    legacy_nested_keys = {
+        alias.removeprefix(f"{key}.")
+        for alias in schema.legacy_aliases
+        if alias.startswith(f"{key}.")
+    }
+    unknown = set(value) - set(default) - legacy_nested_keys
+    if key == "material_palette":
+        invalid_roles = {name for name in value if not isinstance(name, str) or not name.strip()}
+        if invalid_roles:
+            raise ValueError("material_palette role names must be non-empty strings")
+        unknown = set()
     if unknown:
         raise ValueError(f"unknown parameter {key}.{sorted(unknown)[0]!s}")
     return value
@@ -461,6 +535,32 @@ def _apply_values(
                 raise ValueError("derived must be a JSON object of assertions")
             derived_assertions.update(value)
             continue
+        if schema.version >= 3 and input_key == "roof_section":
+            if not isinstance(value, Mapping) or value.get("profile") != "symmetric_gable":
+                raise ValueError("legacy roof_section is supported only for profile 'symmetric_gable'")
+            unknown = set(value) - {"profile", "rise"}
+            if unknown:
+                raise ValueError(f"unknown legacy roof_section field: {sorted(unknown)[0]}")
+            if "rise" in value:
+                _record_and_write(
+                    target,
+                    "roof_profile.ridge_height",
+                    value["rise"],
+                    "roof_section.rise",
+                    conflicts,
+                )
+            continue
+        if schema.version >= 3 and input_key == "eaves":
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError("eaves must be a non-negative integer")
+            treatment = "hard_gable" if value == 0 else "overhanging_gable"
+            for path, normalized in (
+                ("eave_profile.side_overhang", value),
+                ("eave_profile.gable_end_projection", value),
+                ("eave_profile.gable_end_treatment", treatment),
+            ):
+                _record_and_write(target, path, normalized, "eaves", conflicts)
+            continue
         if input_key in aliases:
             canonical_path = aliases[input_key]
         elif input_key in schema.independent_fields:
@@ -468,11 +568,21 @@ def _apply_values(
         else:
             raise ValueError(f"unknown parameter: {input_key}")
 
-        if input_key not in aliases and canonical_path in ("roof_section", "interfaces", "materials"):
+        nested_fields = {
+            "roof_section",
+            "interfaces",
+            "materials",
+            "roof_profile",
+            "eave_profile",
+            "ridge_profile",
+            "material_palette",
+        }
+        if input_key not in aliases and canonical_path in nested_fields:
             nested = _validate_nested(schema, canonical_path, value)
             for nested_key, nested_value in nested.items():
                 nested_path = f"{canonical_path}.{nested_key}"
-                _record_and_write(target, nested_path, nested_value, f"{input_key}.{nested_key}", conflicts)
+                normalized_path = aliases.get(nested_path, nested_path)
+                _record_and_write(target, normalized_path, nested_value, f"{input_key}.{nested_key}", conflicts)
             continue
         _record_and_write(target, canonical_path, value, input_key, conflicts)
 
@@ -486,12 +596,22 @@ def _record_and_write(
 ) -> None:
     if conflicts is not None:
         previous = conflicts.get(path)
-        if previous is not None and previous[0] != value:
+        normalized_value = _conflict_comparison_value(path, value)
+        if previous is not None and previous[0] != normalized_value:
             raise ParameterConflictError(
                 f"conflicting parameter values for {previous[1]!r} and {input_name!r}"
             )
-        conflicts[path] = (deepcopy(value), input_name)
+        conflicts[path] = (deepcopy(normalized_value), input_name)
     _write_path(target, path, value)
+
+
+def _conflict_comparison_value(path: str, value: object) -> object:
+    if path.startswith("material_palette.") and isinstance(value, str):
+        try:
+            return BlockState.parse(value)
+        except ValueError:
+            return value
+    return value
 
 
 def _derived_values(schema: ParameterSchema, config: Mapping[str, object]) -> dict[str, object]:
@@ -505,15 +625,24 @@ def _derived_values(schema: ParameterSchema, config: Mapping[str, object]) -> di
             raise ValueError("bay_spacing must be an integer")
         if not isinstance(depth, int) or isinstance(depth, bool):
             raise ValueError("depth must be an integer")
-        eaves = config["eaves"]
-        if not isinstance(eaves, int) or isinstance(eaves, bool):
-            raise ValueError("eaves must be an integer")
         plinth_width = bay_count * bay_spacing + 1
+        if schema.version >= 3:
+            eave_profile = config["eave_profile"]
+            assert isinstance(eave_profile, Mapping)
+            gable_projection = eave_profile["gable_end_projection"]
+            side_overhang = eave_profile["side_overhang"]
+            if any(isinstance(value, bool) or not isinstance(value, int) for value in (gable_projection, side_overhang)):
+                raise ValueError("eave projection values must be integers")
+        else:
+            eaves = config["eaves"]
+            if not isinstance(eaves, int) or isinstance(eaves, bool):
+                raise ValueError("eaves must be an integer")
+            gable_projection = side_overhang = eaves
         return {
             "plinth_width": plinth_width,
             "plinth_depth": depth,
-            "bounds_width": plinth_width + 2 * eaves,
-            "bounds_depth": depth + 2 * eaves,
+            "bounds_width": plinth_width + 2 * gable_projection,
+            "bounds_depth": depth + 2 * side_overhang,
         }
     if schema.kind == "corridor":
         length = config["length"]
@@ -526,13 +655,26 @@ def _derived_values(schema: ParameterSchema, config: Mapping[str, object]) -> di
         assert isinstance(interfaces, Mapping)
         passage_width = interfaces["passage_width"]
         effective_passage_width = max(1, width - 2) if passage_width is None else passage_width
-        return {
+        derived = {
             "platform_length": length,
             "platform_width": width,
             "post_x_positions": positions,
             "post_count_per_side": len(positions),
             "effective_passage_width": effective_passage_width,
         }
+        if schema.version >= 3:
+            eave_profile = config["eave_profile"]
+            assert isinstance(eave_profile, Mapping)
+            gable_projection = eave_profile["gable_end_projection"]
+            side_overhang = eave_profile["side_overhang"]
+            if any(
+                isinstance(value, bool) or not isinstance(value, int)
+                for value in (gable_projection, side_overhang)
+            ):
+                raise ValueError("eave projection values must be integers")
+            derived["bounds_width"] = length + 2 * gable_projection
+            derived["bounds_depth"] = width + 2 * side_overhang
+        return derived
     raise ValueError(f"no deterministic derived-parameter rules for {schema.kind!r}")
 
 
@@ -543,17 +685,51 @@ def _resolve_generator_parameters(schema: ParameterSchema, config: Mapping[str, 
         )
     if config.get("roof_type") != "gable":
         raise ValueError("unsupported roof_type; v1 supports only 'gable'")
-    roof_section = config.get("roof_section")
-    if not isinstance(roof_section, Mapping) or roof_section.get("profile") != "symmetric_gable":
-        raise ValueError("unsupported roof_section.profile; v1 supports only 'symmetric_gable'")
+    if schema.version < 3:
+        roof_section = config.get("roof_section")
+        if not isinstance(roof_section, Mapping) or roof_section.get("profile") != "symmetric_gable":
+            raise ValueError("unsupported roof_section.profile; v1 supports only 'symmetric_gable'")
     _nonempty(config.get("style"), "style")
 
     generator_values = {
         parameter_name: _read_path(config, input_path)
         for input_path, parameter_name in schema.generator_fields.items()
     }
+    if schema.version >= 3:
+        generator_values["roof_profile"] = _roof_profile_from_mapping(generator_values["roof_profile"])
+        generator_values["eave_profile"] = _eave_profile_from_mapping(generator_values["eave_profile"])
+        generator_values["ridge_profile"] = _ridge_profile_from_mapping(generator_values["ridge_profile"])
+        generator_values["material_palette"] = _material_palette_from_mapping(
+            generator_values["material_palette"]
+        )
+        for role, state_string in generator_values["material_palette"].roles.items():
+            try:
+                validate_roof_material_state(BlockState.parse(state_string))
+            except ValueError as exc:
+                raise ValueError(f"invalid material_palette role {role!r}: {exc}") from exc
     generator_type = HallParameters if schema.kind == "hall" else CorridorParameters
     generator_parameters = generator_type(**generator_values)
+    if schema.version < 3:
+        legacy_materials = generator_values.get("materials")
+        if isinstance(legacy_materials, Mapping):
+            for role in ("roof", "eaves"):
+                state_string = legacy_materials.get(role)
+                if isinstance(state_string, str):
+                    try:
+                        validate_roof_material_state(BlockState.parse(state_string))
+                    except ValueError as exc:
+                        raise ValueError(f"invalid legacy materials.{role}: {exc}") from exc
+    else:
+        ridge_profile = generator_values["ridge_profile"]
+        material_palette = generator_values["material_palette"]
+        assert isinstance(ridge_profile, RidgeProfile)
+        assert isinstance(material_palette, MaterialPalette)
+        if ridge_profile.cap_height > 0:
+            if ridge_profile.material_role not in material_palette.roles:
+                raise ValueError(f"missing material palette role {ridge_profile.material_role!r}")
+            cap_state = BlockState.parse(material_palette.roles[ridge_profile.material_role])
+            if roof_material_shape(cap_state) != "full":
+                raise ValueError("ridge cap material must be a full block")
     adapter_options = {
         option_name: _read_path(config, input_path)
         for input_path, option_name in schema.adapter_fields.items()
@@ -595,7 +771,9 @@ def resolve_parameters(
     config = _thaw(schema.defaults)
     assert isinstance(config, dict)
     if base_config is not None:
-        _apply_values(schema, config, base_config)
+        thawed_base = _thaw(base_config)
+        assert isinstance(thawed_base, dict)
+        _apply_values(schema, config, thawed_base)
     explicit_conflicts: dict[str, tuple[object, str]] = {}
     derived_assertions: dict[str, object] = {}
     _apply_values(schema, config, values or {}, conflicts=explicit_conflicts, derived_assertions=derived_assertions)

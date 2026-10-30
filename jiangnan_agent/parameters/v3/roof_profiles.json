@@ -1,0 +1,161 @@
+{
+  "version": 3,
+  "minecraft_version": "1.21.5",
+  "source_category": "minecraft_adaptation",
+  "historical_claims": false,
+  "presets": [
+    {
+      "preset_id": "gray_brick_layered",
+      "preset_version": 1,
+      "roof_profile": {
+        "ridge_height": 2,
+        "section_points": [
+          [
+            0,
+            0
+          ],
+          [
+            333,
+            500
+          ],
+          [
+            667,
+            500
+          ],
+          [
+            1000,
+            1000
+          ]
+        ],
+        "surface_bands": [
+          {
+            "start": 0,
+            "end": 1000,
+            "form": "stair",
+            "material_role": "roof_stair"
+          }
+        ]
+      },
+      "eave_profile": {
+        "side_overhang": 2,
+        "gable_end_treatment": "overhanging_gable",
+        "gable_end_projection": 1,
+        "thickness": 2,
+        "layer_roles": [
+          "eaves",
+          "eaves"
+        ],
+        "decoration_role": null,
+        "decoration_spacing": 0
+      },
+      "ridge_profile": {
+        "cap_width": 1,
+        "cap_height": 1,
+        "material_role": "ridge",
+        "decoration_role": null,
+        "decoration_spacing": 0
+      },
+      "material_palette": {
+        "roof_stair": "minecraft:stone_brick_stairs",
+        "eaves": "minecraft:stone_brick_slab[type=bottom,waterlogged=false]",
+        "ridge": "minecraft:chiseled_stone_bricks"
+      }
+    },
+    {
+      "preset_id": "jiangnan_dark_tile",
+      "preset_version": 1,
+      "roof_profile": {
+        "ridge_height": 3,
+        "section_points": [
+          [
+            0,
+            0
+          ],
+          [
+            1000,
+            1000
+          ]
+        ],
+        "surface_bands": [
+          {
+            "start": 0,
+            "end": 1000,
+            "form": "stair",
+            "material_role": "roof_stair"
+          }
+        ]
+      },
+      "eave_profile": {
+        "side_overhang": 1,
+        "gable_end_treatment": "hard_gable",
+        "gable_end_projection": 0,
+        "thickness": 1,
+        "layer_roles": [
+          "eaves"
+        ],
+        "decoration_role": null,
+        "decoration_spacing": 0
+      },
+      "ridge_profile": {
+        "cap_width": 1,
+        "cap_height": 1,
+        "material_role": "ridge",
+        "decoration_role": null,
+        "decoration_spacing": 0
+      },
+      "material_palette": {
+        "roof_stair": "minecraft:polished_deepslate_stairs",
+        "eaves": "minecraft:deepslate_tile_slab[type=bottom,waterlogged=false]",
+        "ridge": "minecraft:polished_deepslate"
+      }
+    },
+    {
+      "preset_id": "warm_spruce_garden",
+      "preset_version": 1,
+      "roof_profile": {
+        "ridge_height": 1,
+        "section_points": [
+          [
+            0,
+            0
+          ],
+          [
+            1000,
+            1000
+          ]
+        ],
+        "surface_bands": [
+          {
+            "start": 0,
+            "end": 1000,
+            "form": "stair",
+            "material_role": "roof_stair"
+          }
+        ]
+      },
+      "eave_profile": {
+        "side_overhang": 1,
+        "gable_end_treatment": "overhanging_gable",
+        "gable_end_projection": 1,
+        "thickness": 1,
+        "layer_roles": [
+          "eaves"
+        ],
+        "decoration_role": null,
+        "decoration_spacing": 0
+      },
+      "ridge_profile": {
+        "cap_width": 0,
+        "cap_height": 0,
+        "material_role": "ridge",
+        "decoration_role": null,
+        "decoration_spacing": 0
+      },
+      "material_palette": {
+        "roof_stair": "minecraft:spruce_stairs",
+        "eaves": "minecraft:spruce_slab[type=bottom,waterlogged=false]",
+        "ridge": "minecraft:spruce_planks"
+      }
+    }
+  ]
+}

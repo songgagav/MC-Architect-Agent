@@ -54,7 +54,7 @@ class AssetSpec:
             or self.region_association_kind != "design_target"
             or not self.region_association_note.strip()
         ):
-            raise ValueError("version 3 assets need region/rule links and Minecraft 1.21.5 design-target metadata")
+            raise ValueError("version 3+ assets need region/rule links and Minecraft 1.21.5 design-target metadata")
 
 
 @lru_cache(maxsize=None)

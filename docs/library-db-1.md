@@ -14,7 +14,7 @@
 可编辑建筑工程 ──保持现有格式──> 工程 JSON（不进入参考库）
 ```
 
-- **SQLite**：Python 标准库 `sqlite3`，开启外键，迁移号记录在 `PRAGMA user_version` 和 `schema_migrations`。当前 schema 为 3；迁移文件按 `001`、`002`、`003` 顺序执行。每项迁移和目录同步都在事务内；异常会回滚。
+- **SQLite**：Python 标准库 `sqlite3`，开启外键，迁移号记录在 `PRAGMA user_version` 和 `schema_migrations`。DB-1 原始 schema 为 3；DB-2 在其基础上追加迁移 004，当前 schema 为 4。迁移按 `001` 至 `004` 顺序执行；异常会回滚。
 - **JSON**：知识库沿用 `jiangnan_agent/knowledge/v3/`；hall/corridor 生成器参数沿用 `parameters/v2/`；跨模块设计参数登记位于 `library/parameters/v1/minecraft_building_design.json`；模块索引位于 `library/catalog/v1/modules.json`；风格预设位于 `library/styles/v1/`。这些文本文件是可审阅、可版本控制的定义。
 - **文件系统**：数据库仅记录原始文件路径、SHA-256 和聚合信息。不会把几百万个方块拆成数据库行，也不会复制或修改用户投影。相对路径以仓库根目录为准；仓库外文件保留绝对路径。
 - **工程边界**：数据库的参考资产不是工程中的模块实例。工程仍由 `workspace/projects/*.jap.json` 保存；参考库不保存工程方块快照。

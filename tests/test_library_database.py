@@ -6,6 +6,8 @@ import sqlite3
 
 import pytest
 
+from jiangnan_agent.assets.registry import get_asset
+from jiangnan_agent.knowledge import load_knowledge_base
 from jiangnan_agent.library.database import LibraryDatabase
 from jiangnan_agent.library.errors import AssetIntegrityError, LibraryLookupError
 from jiangnan_agent.library.service import LibraryService
@@ -17,9 +19,9 @@ def test_database_migrations_and_catalog_seed_are_idempotent(tmp_path: Path) -> 
     database = LibraryDatabase(tmp_path / "library.sqlite3")
     service = LibraryService(database, project_root=tmp_path)
 
-    assert service.initialize() == 3
-    assert service.initialize() == 3
-    assert database.schema_version == 3
+    assert service.initialize() == 4
+    assert service.initialize() == 4
+    assert database.schema_version == 4
     assert [region["region_id"] for region in service.list_regions(active_only=True)] == [
         "huizhou_core",
         "jiangnan_suzhou",
@@ -240,7 +242,7 @@ def test_sqlite_transaction_rolls_back_and_backup_is_queryable(tmp_path: Path) -
     with pytest.raises(FileExistsError):
         database.backup_to(backup)
     saved = LibraryDatabase(backup)
-    assert saved.schema_version == 3
+    assert saved.schema_version == 4
     assert saved.get_meta("library_id") == database.get_meta("library_id")
 
 
@@ -257,12 +259,102 @@ def test_module_catalog_tracks_parameter_schema_as_a_definition_not_instance(tmp
     service.initialize()
     hall = service.get_module_definition("jiangnan.hall")
 
-    assert hall["asset_version"] == 3
+    assert hall["asset_version"] == 4
     assert hall["parameter_schema_id"] == "hall"
-    assert hall["parameter_schema_version"] == 2
+    assert hall["parameter_schema_version"] == 3
     assert hall["parameter_schema"]["kind"] == "hall"
     assert "module_instance_id" not in hall
     assert hall["knowledge_rule_ids"] == ["hui-village-layout-and-architecture"]
+
+
+def test_sqlite_module_catalog_matches_latest_python_asset_registry(tmp_path: Path) -> None:
+    service = LibraryService(LibraryDatabase(tmp_path / "library.sqlite3"), project_root=tmp_path)
+    service.initialize()
+
+    for asset_id in ("jiangnan.hall", "jiangnan.corridor"):
+        registered = get_asset(asset_id)
+        module = service.get_module_definition(asset_id)
+
+        assert module["asset_version"] == registered.version == 4
+        assert module["kind"] == registered.kind
+        assert module["parameter_schema_id"] == registered.parameter_schema_id
+        assert module["parameter_schema_version"] == registered.parameter_schema_version
+        assert module["generator_source_id"] == registered.source_id
+        assert module["anchor_interfaces"] == list(registered.anchor_interfaces)
+        assert module["regions"] == list(registered.region_ids)
+        assert module["knowledge_rule_ids"] == list(registered.knowledge_rule_ids)
+
+
+def test_module_catalog_preserves_v3_and_registers_v4(tmp_path: Path) -> None:
+    database = LibraryDatabase(tmp_path / "library.sqlite3")
+    service = LibraryService(database, project_root=tmp_path)
+    database.initialize()
+    legacy_catalog_path = Path(__file__).resolve().parents[1] / "jiangnan_agent/library/catalog/v1/modules.json"
+    legacy_catalog = json.loads(legacy_catalog_path.read_text(encoding="utf-8"))
+    with database.transaction() as connection:
+        service._upsert_knowledge(connection, load_knowledge_base())
+        service._upsert_module_catalog(connection, legacy_catalog["modules"])
+    with database.connection() as connection:
+        original_v3_records = {
+            row["asset_id"]: row["record_json"]
+            for row in connection.execute(
+                "SELECT asset_id, record_json FROM module_assets WHERE version = 3 ORDER BY asset_id"
+            )
+        }
+
+    service.initialize()
+    first_count = database.connection()
+    with first_count as connection:
+        first_module_count = connection.execute("SELECT COUNT(*) FROM module_assets").fetchone()[0]
+    service.initialize()
+
+    with database.connection() as connection:
+        preserved_v3_records = {
+            row["asset_id"]: row["record_json"]
+            for row in connection.execute(
+                "SELECT asset_id, record_json FROM module_assets WHERE version = 3 ORDER BY asset_id"
+            )
+        }
+        second_module_count = connection.execute("SELECT COUNT(*) FROM module_assets").fetchone()[0]
+    assert preserved_v3_records == original_v3_records
+    assert first_module_count == second_module_count
+    for asset_id in ("jiangnan.hall", "jiangnan.corridor"):
+        assert service.get_module_definition(asset_id, version=3)["asset_version"] == 3
+        assert service.get_module_definition(asset_id, version=4)["asset_version"] == 4
+
+
+def test_list_modules_returns_latest_unless_versions_requested(tmp_path: Path) -> None:
+    service = LibraryService(LibraryDatabase(tmp_path / "library.sqlite3"), project_root=tmp_path)
+    service.initialize()
+
+    latest = service.list_modules(include_planned=True)
+    assert [item["asset_id"] for item in latest].count("jiangnan.hall") == 1
+    assert [item["asset_id"] for item in latest].count("jiangnan.corridor") == 1
+    assert service.get_module_definition("jiangnan.hall")["asset_version"] == 4
+    assert any(item["status"] == "planned" for item in latest)
+
+    all_versions = service.list_modules(include_planned=True, include_versions=True)
+    assert {
+        item["asset_version"] for item in all_versions if item["asset_id"] == "jiangnan.hall"
+    } == {1, 2, 3, 4}
+    assert {
+        item["asset_version"] for item in all_versions if item["asset_id"] == "jiangnan.corridor"
+    } == {1, 2, 3, 4}
+
+
+def test_module_catalog_reports_conflicting_stable_registry_identity(tmp_path: Path) -> None:
+    database = LibraryDatabase(tmp_path / "library.sqlite3")
+    service = LibraryService(database, project_root=tmp_path)
+    service.initialize()
+
+    with database.transaction() as connection:
+        connection.execute(
+            "UPDATE module_assets SET kind = ? WHERE asset_id = ? AND version = 4",
+            ("corridor", "jiangnan.hall"),
+        )
+
+    with pytest.raises(ValueError, match="Python asset registry conflicts with stored module"):
+        service._synchronize_catalogs()
 
 
 def test_design_parameter_registry_covers_visual_inputs_without_fake_historical_defaults(tmp_path: Path) -> None:
@@ -383,10 +475,10 @@ def test_knowledge_registry_is_versioned_and_current_profile_queries_report_vers
         versions = connection.execute(
             "SELECT version, content_sha256 FROM knowledge_registry_versions ORDER BY version"
         ).fetchall()
-    assert [(int(row["version"]), len(row["content_sha256"])) for row in versions] == [(3, 64)]
-    assert all(region["registry_version"] == 3 for region in service.list_regions())
-    assert service.list_knowledge_rules(region="huizhou_core")["knowledge_base_version"] == 3
-    assert service.list_sources()[0]["registry_version"] == 3
+    assert [(int(row["version"]), len(row["content_sha256"])) for row in versions] == [(4, 64)]
+    assert all(region["registry_version"] == 4 for region in service.list_regions())
+    assert service.list_knowledge_rules(region="huizhou_core")["knowledge_base_version"] == 4
+    assert service.list_sources()[0]["registry_version"] == 4
 
 
 def test_database_foreign_keys_and_module_version_history_are_enforced(tmp_path: Path) -> None:
@@ -415,7 +507,7 @@ def test_database_foreign_keys_and_module_version_history_are_enforced(tmp_path:
                VALUES ('test.versioned-module', 2, 'test_kind', 'planned', 'catalog.json',
                        'unclassified', '[]', '[]', '[]', '{}')"""
         )
-    assert database.schema_version == 3
+    assert database.schema_version == 4
 
 
 def test_database_upgrades_an_existing_v1_file_in_order(tmp_path: Path) -> None:
@@ -432,8 +524,8 @@ def test_database_upgrades_an_existing_v1_file_in_order(tmp_path: Path) -> None:
 
     service = LibraryService(LibraryDatabase(path), project_root=tmp_path)
 
-    assert service.initialize() == 3
-    assert service.list_knowledge_rules(region="huizhou_core")["knowledge_base_version"] == 3
+    assert service.initialize() == 4
+    assert service.list_knowledge_rules(region="huizhou_core")["knowledge_base_version"] == 4
 
 
 def test_versioned_module_parameter_and_style_definitions_are_immutable(tmp_path: Path) -> None:

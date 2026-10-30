@@ -103,15 +103,15 @@ jiangnan validate examples\three_bay_hall.jap.json
 jiangnan generate --project examples\three_bay_hall.jap.json
 ```
 
-`hall` 工程可调 `bay_count`（奇数开间）、`bay_width`、`depth`、`column_height`、`plinth_height`、`roof_rise`、`eaves`、`door_width` 和 `materials`。生成器会按参数同步调整柱网、梁、墙、门窗、台基、檐口和屋顶。
+`hall` 工程可调 `bay_count`（奇数开间）、`bay_width`、`depth`、`column_height`、`plinth_height`、`door_width` 和 `materials`。兼容旧工程的 `roof_rise`、`eaves`、`materials.roof` 与 `materials.eaves` 输入；新设计建议使用参数化 `roof_profile`、`eave_profile`、`ridge_profile` 和 `material_palette`，见 [`docs/roof-eaves-v2.md`](docs/roof-eaves-v2.md)。生成器会按参数同步调整柱网、梁、墙、门窗、台基、檐口和屋顶。
 
 ## 版本化知识、参数与资产
 
 厅堂与直廊的新模块通过版本化资产登记创建，执行仍映射到现有 `HallParameters`、`CorridorParameters` 和生成器。参数 schema 将独立输入、派生结果、硬约束与软提示分开，并记录参数来源类别；冲突字段或不支持版本会明确报错。模块工程记录资产、知识库、参数 schema 和来源元数据，旧工程仍可读取。
 
-当前知识库默认为 v3，来源、规则和地域配置分别存放；v1/v2 可显式读取。只有 `huizhou_core`（西递、宏村的村落级官方描述）和 `jiangnan_suzhou`（苏州古典园林的园林级官方描述）启用。其他候选地域为 `catalog_only`；未取得全文和定位的地方资料及对应规则标为待核查，并从普通查询中隐藏。当前资产目录为 v3，hall/corridor 资产 v3 使用参数 schema v2，并仍调用原有方块生成器；v1/v2 资产和 schema 保持可读，既有方块输出不变。新资产的地域标签只表达设计目标，不代表历史形制已经验证。
+当前知识库默认为 v4，来源、规则和地域配置分别存放；v1-v3 可显式读取。v4 增加屋顶生成器与参数解析器的项目代码来源，不新增历史屋顶规则，也不改变 v3 的地域和知识规则。只有 `huizhou_core`（西递、宏村的村落级官方描述）和 `jiangnan_suzhou`（苏州古典园林的园林级官方描述）启用。其他候选地域为 `catalog_only`；未取得全文和定位的地方资料及对应规则标为待核查，并从普通查询中隐藏。当前资产目录为 v4，hall/corridor 资产 v4 使用参数 schema v3；v1-v3 资产、v1-v2 参数 schema 保持可读。新资产的地域标签只表达设计目标，不代表历史形制已经验证。
 
-可复现的三开间参数样例见 `examples/hall_v1_parameters.json`（为兼容演示而固定 asset v2/schema v1）。`bay_spacing` 映射到现有参数 `bay_width`；当前屋顶断面仅支持生成器实现的对称双坡。新参数的来源类别和模块资产示例见 [`docs/parameter-registry.md`](docs/parameter-registry.md)；地域范围、来源核查等级和待核查记录见 [`docs/knowledge-regions.md`](docs/knowledge-regions.md)。用户 `.litematic` 只登记为视觉偏好参考，不作为历史证据。
+可复现的三开间参数样例见 `examples/hall_v1_parameters.json`（为兼容演示而固定 asset v2/schema v1）。`bay_spacing` 映射到现有参数 `bay_width`。Roof & Eaves v2 保留对称双坡主体，可配置坡面断面、屋脊高度、檐口层次、出檐、屋脊盖脊与材料；歇山、攒尖等复杂屋顶暂不支持。三组预设是 Minecraft 创作方案，不代表历史测绘或营造标准。新参数的来源类别和模块资产示例见 [`docs/parameter-registry.md`](docs/parameter-registry.md)；地域范围、来源核查等级和待核查记录见 [`docs/knowledge-regions.md`](docs/knowledge-regions.md)。用户 `.litematic` 只登记为视觉偏好参考，不作为历史证据。
 
 ## 本地建筑参考库（DB-1）
 
@@ -137,13 +137,36 @@ jiangnan library verify
 jiangnan library backup --output workspace\library\backup-2026-10-30.sqlite3
 ```
 
-知识来源/规则/地域目录与模块、参数、风格 JSON 是可审阅的版本化定义；SQLite 使用迁移版本 3 保存索引、关系和投影材料/高度层聚合。初始化和重复导入具有幂等性；若同一资产 ID 对应文件内容发生变化，会登记下一个资产版本。`library verify` 检查原始投影 SHA-256 和已登记预览文件是否仍存在。备份数据库时也要单独备份原始投影与预览图，因为 SQLite 不复制这些外部大文件。
+知识来源/规则/地域目录与模块、参数、风格 JSON 是可审阅的版本化定义；SQLite 当前迁移版本为 4，保存索引、关系、投影材料/高度层聚合、语义标注、静态参考构件和风格分析快照。初始化和重复导入具有幂等性；若同一资产 ID 对应文件内容发生变化，会登记下一个资产版本。`library verify` 检查原始投影 SHA-256 和已登记预览文件是否仍存在。备份数据库时也要单独备份原始投影与预览图，因为 SQLite 不复制这些外部大文件。
 
 `minecraft_building_design@1` 参数登记表覆盖整体尺寸、开间与柱网、屋顶断面、檐口、材料、门窗比例、装饰密度、参考资产和模块连接约束。每项标记为当前生成器支持、部分支持、仅风格建议或规划字段。它不扩展现有生成器：例如屋脊轮廓、翘角、屋面层次和装饰密度保留空默认值并标为未实现；历史文献、测绘、参考投影统计、用户输入、派生值和 Minecraft 创作适配分别标记来源类别。
 
 导入器只读解析 Litematica NBT，保留源文件、区域正负尺寸、坐标、方块状态及原始 SHA-256；数据库只存材料和 Y 层统计，不逐方块建表。当前已登记的两份本地模板 DataVersion 均为 3465，低于项目目标 1.21.5 / DataVersion 4325；状态会标为“需复核”，不会自动升级方块或声称已在目标版本实机验证。其区域归属保持未核查。`jiangnan_mc_classic` 与 `huizhou_mc_classic` 是可覆盖的 Minecraft 视觉创作预设；材料候选来自实际投影频次，屋顶/墙体语义没有可靠分类时仍标记未核查。作者元数据为 `Paper_Angle`，授权未知，默认不授予再分发权。
 
 完整 Schema、表关系、备份步骤、导入数字和待验事项见 [`docs/library-db-1.md`](docs/library-db-1.md)。
+
+## 建筑语义与风格分析（DB-2）
+
+DB-2 将可复现的方块测量和待人工审核的语义猜测分开保存。Region、半开坐标盒 `[min,max)` 和精确方块集都使用 Litematica 源坐标；精确集合在数据库内以确定排序、合并连续 X 坐标的游程保存。读取和分析前后都会核对原文件 SHA-256。旧 DataVersion（例如 3465）仍可用于参考分析，原版本只作来源元数据，不会伪装升级。
+
+自动规则只根据 Minecraft 方块身份提出 `candidate`（当前规则覆盖门、玻璃类窗候选和栏杆候选）；它们不代表构件识别事实。人工通过审核命令记录 `verified` 或 `rejected`，编辑会追加新 revision 并重置为 `candidate`。只有已核验的标注可登记为 `static_reference`，其状态始终是 `not_parameterized` 或 `planned`，不等同于可变尺寸生成器。风格分析报告固定风格预设版本和来源资产版本，保存尺寸、材料、区域截面、已核验构件及候选标注；未知结构关系保持未核验，并且不会写回或升级现有风格 JSON。文件名、作者和用户提供的 Minecraft 投影不用于推断徽州/江南历史来源。
+
+```powershell
+$db2 = "workspace\library\architect_library_db2.sqlite3"
+jiangnan library annotations propose reference.fangtang --database $db2
+jiangnan library annotations list --asset-id reference.fangtang --status candidate --database $db2
+jiangnan library annotations create --annotation-id manual.unclassified-example --asset-id reference.fangtang `
+  --region Unnamed --component-type unknown --geometry-type block_set `
+  --geometry '{"positions":[[42,35,41]]}' --database $db2
+jiangnan library annotations analyze manual.unclassified-example --database $db2
+# 先对照预览检查候选标注，再把 candidate-id-from-list 替换成列表返回的 ID
+jiangnan library annotations review candidate-id-from-list --reviewer MOSS --decision verified --note "已人工核对" --database $db2
+jiangnan library components list --source-asset reference.fangtang --database $db2
+jiangnan library style-analysis create jiangnan_mc_classic --database $db2
+jiangnan library style-analysis list --profile-id jiangnan_mc_classic --database $db2
+```
+
+组件注册和风格分析命令会返回 ID；需要导出时，将返回值赋给 `$componentId` 或 `$analysisId`，并选择一个不存在的新输出文件名，再运行 `jiangnan library components report $componentId --output workspace\library\component-report-new.json --database $db2` 或 `jiangnan library style-analysis export $analysisId --output workspace\library\style-report-new.json --database $db2`。`[42,35,41]` 是该投影第一个占用位置，方块为 tripwire；示例将它标为 `unknown`，不代表建筑构件。其他坐标和 BlockState 属性需要对照原投影与预览逐项审核。导出使用独占创建，不会覆盖已有报告。SQLite 迁移 004 为追加式 schema 变更；迁移前建议用 `jiangnan library backup --output <新文件>` 备份数据库，并另行备份原投影与预览文件。更多结构、审核边界和验收限制见 [`docs/library-db-2.md`](docs/library-db-2.md)。
 
 ## 三维预览与修改对比
 

@@ -9,7 +9,7 @@ import sqlite3
 from typing import Iterator
 import uuid
 
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 
 
 class LibraryDatabase:
