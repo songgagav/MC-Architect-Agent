@@ -1,0 +1,196 @@
+{
+  "version": 5,
+  "rules": [
+    {
+      "rule_id": "hall-footprint-width",
+      "source_id": "generator.hall.v1",
+      "applicable_regions": [
+        "unspecified"
+      ],
+      "building_types": [
+        "hall"
+      ],
+      "evidence_kind": "minecraft_adaptation",
+      "basis": "generate_hall computes width as bay_count * bay_width + 1 blocks.",
+      "confidence": "high",
+      "scope": "Current voxel generator behavior only; not a historic dimension or regional standard.",
+      "statement": "The generated hall footprint width follows the current bay-grid formula.",
+      "verification_level": "repository_inspected",
+      "status": "active"
+    },
+    {
+      "rule_id": "hall-front-window-width",
+      "source_id": "generator.hall.v1",
+      "applicable_regions": [
+        "unspecified"
+      ],
+      "building_types": [
+        "hall"
+      ],
+      "evidence_kind": "minecraft_adaptation",
+      "basis": "The current generator uses min(2, bay_width - 3) for a front-window width.",
+      "confidence": "high",
+      "scope": "Current Minecraft block output warning only; it is not an architectural recommendation.",
+      "statement": "A bay spacing below five blocks narrows the default front window in the current generator.",
+      "verification_level": "repository_inspected",
+      "status": "active"
+    },
+    {
+      "rule_id": "corridor-post-grid",
+      "source_id": "generator.corridor.v1",
+      "applicable_regions": [
+        "unspecified"
+      ],
+      "building_types": [
+        "corridor"
+      ],
+      "evidence_kind": "minecraft_adaptation",
+      "basis": "The generator places posts at regular spacing and also at the final end position.",
+      "confidence": "high",
+      "scope": "Current straight-corridor Minecraft generator behavior only.",
+      "statement": "The corridor post grid includes the final end position.",
+      "verification_level": "repository_inspected",
+      "status": "active"
+    },
+    {
+      "rule_id": "user-independent-modules",
+      "source_id": "user.modular-buildings.v1",
+      "applicable_regions": [
+        "not_applicable"
+      ],
+      "building_types": [
+        "any"
+      ],
+      "evidence_kind": "user_preference",
+      "basis": "The user requested individual buildings with modular parts that can be freely combined.",
+      "confidence": "high",
+      "scope": "Product design preference; not a historical construction fact.",
+      "statement": "Buildings should remain individually addressable and freely combinable as modules.",
+      "verification_level": "direct_user_requirement",
+      "status": "active"
+    },
+    {
+      "rule_id": "hui-village-layout-and-architecture",
+      "source_id": "unesco.xidi-hongcun.ouval",
+      "applicable_regions": [
+        "huizhou_core"
+      ],
+      "building_types": [
+        "traditional_village"
+      ],
+      "evidence_kind": "literature_fact",
+      "basis": "UNESCO Outstanding Universal Value, Brief synthesis, states the listed villages' location and describes their layout, landscape, architectural form, decoration, and construction techniques for the 14th–20th centuries.",
+      "confidence": "high",
+      "scope": "Only the listed villages Xidi and Hongcun and the temporal scope stated by UNESCO; descriptive context, not a universal rule or dimension standard.",
+      "statement": "UNESCO places Xidi and Hongcun in Yi County, Huangshan City, southern Anhui, and describes their overall layout, landscape, architectural form, decoration, and construction techniques as retaining features of Anhui villages between the 14th and 20th centuries.",
+      "verification_level": "primary_source_full_text",
+      "status": "active"
+    },
+    {
+      "rule_id": "hui-street-building-water-context",
+      "source_id": "unesco.xidi-hongcun.ouval",
+      "applicable_regions": [
+        "huizhou_core"
+      ],
+      "building_types": [
+        "traditional_village"
+      ],
+      "evidence_kind": "literature_fact",
+      "basis": "UNESCO Description states that the villages' street plan, architecture and decoration, and the integration of houses with comprehensive water systems are distinctive surviving examples.",
+      "confidence": "high",
+      "scope": "Site-level description of Xidi and Hongcun; does not prescribe an individual house plan or a Minecraft water feature.",
+      "statement": "For Xidi and Hongcun, the street plan, architecture and decoration, and the integration of houses with water systems are documented as related settlement characteristics.",
+      "verification_level": "primary_source_full_text",
+      "status": "active"
+    },
+    {
+      "rule_id": "suzhou-miniature-landscape-context",
+      "source_id": "unesco.suzhou-gardens.ouval",
+      "applicable_regions": [
+        "jiangnan_suzhou"
+      ],
+      "building_types": [
+        "classical_garden"
+      ],
+      "evidence_kind": "literature_fact",
+      "basis": "UNESCO Description and Outstanding Universal Value describe the listed Suzhou gardens as recreating natural landscapes in miniature; the page gives an 11th–19th century date range in the Description.",
+      "confidence": "high",
+      "scope": "The UNESCO-listed classical gardens of Suzhou; landscape-level description, not a building-scale dimension or universal Jiangnan rule.",
+      "statement": "UNESCO describes classical Suzhou garden design as recreating natural landscapes in miniature and dates the listed garden tradition described on the page to the 11th–19th centuries.",
+      "verification_level": "primary_source_full_text",
+      "status": "active"
+    },
+    {
+      "rule_id": "suzhou-garden-elements-context",
+      "source_id": "unesco.suzhou-gardens.ouval",
+      "applicable_regions": [
+        "jiangnan_suzhou"
+      ],
+      "building_types": [
+        "classical_garden"
+      ],
+      "evidence_kind": "literature_fact",
+      "basis": "UNESCO Outstanding Universal Value, Brief synthesis, paragraph describing elements within the space of a residence, names water, stones, plants and various types of buildings.",
+      "confidence": "high",
+      "scope": "Describes listed classical Suzhou gardens; it does not prescribe counts, proportions, or an individual building's construction.",
+      "statement": "UNESCO's description of classical Suzhou gardens identifies water, stones, plants, and varied buildings among the elements used within limited garden space.",
+      "verification_level": "primary_source_full_text",
+      "status": "active"
+    },
+    {
+      "rule_id": "hui-materials-and-gable-decoration",
+      "source_id": "huangshan.gazette.hui-residence-elements",
+      "applicable_regions": [
+        "huizhou_core"
+      ],
+      "building_types": [
+        "residential_building",
+        "residential_compound"
+      ],
+      "evidence_kind": "literature_fact",
+      "basis": "Prior v2 summary text cites this page for roof tile, wall, gable and carved-detail claims, but this run could not retrieve the page body or a section locator.",
+      "confidence": "unknown",
+      "scope": "Not executable or user-visible by default; preserve as an explicit full-text verification task. No material schedule or dimensional rule is active.",
+      "statement": "Pending full-text and locator verification; the prior summary claim is intentionally inactive.",
+      "verification_level": "pending_full_text",
+      "status": "pending_verification"
+    },
+    {
+      "rule_id": "hui-courtyard-and-sequential-compound",
+      "source_id": "huangshan.gazette.hui-residence-elements",
+      "applicable_regions": [
+        "huizhou_core"
+      ],
+      "building_types": [
+        "residential_building",
+        "residential_compound"
+      ],
+      "evidence_kind": "literature_fact",
+      "basis": "Prior v2 summary text cites this page for house/courtyard arrangements, but this run could not retrieve the page body or a section locator.",
+      "confidence": "unknown",
+      "scope": "Not executable or user-visible by default; preserve as a full-text verification task. No dimensions are inferred.",
+      "statement": "Pending full-text and locator verification; the prior summary claim is intentionally inactive.",
+      "verification_level": "pending_full_text",
+      "status": "pending_verification"
+    },
+    {
+      "rule_id": "facade-profile-minecraft-creative-config",
+      "source_id": "generator.facade.v1",
+      "applicable_regions": [
+        "huizhou_core",
+        "jiangnan_suzhou"
+      ],
+      "building_types": [
+        "hall",
+        "corridor"
+      ],
+      "evidence_kind": "minecraft_adaptation",
+      "basis": "The versioned FacadeProfile schema and adapters configure voxel façades in the local Minecraft generator.",
+      "confidence": "high",
+      "scope": "Minecraft creative configuration only; not a historic construction rule, regional attribution, or dimensional standard.",
+      "statement": "FacadeProfile is a reusable Minecraft creative configuration for wall panels, openings, and timber details.",
+      "verification_level": "repository_inspected",
+      "status": "active"
+    }
+  ]
+}

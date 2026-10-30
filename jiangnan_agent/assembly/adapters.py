@@ -32,12 +32,23 @@ def _parameters_dict(parameters, defaults: Mapping[str, str]) -> dict[str, objec
             continue
         value = getattr(parameters, item.name)
         if item.name == "materials":
+            if parameters.facade_profile is not None:
+                if value is None:
+                    continue
+                values[item.name] = dict(value)
+                continue
             materials = dict(defaults)
             materials.update(value or {})
             if parameters.material_palette is not None:
                 materials.pop("roof", None)
                 materials.pop("eaves", None)
             values[item.name] = materials
+        elif (
+            item.name == "door_width"
+            and parameters.facade_profile is not None
+            and not parameters._door_width_explicit
+        ):
+            continue
         elif item.name == "facade_profile" and value is not None:
             values[item.name] = facade_profile_to_mapping(value)
         elif item.name in {"roof_profile", "eave_profile", "ridge_profile", "material_palette"}:

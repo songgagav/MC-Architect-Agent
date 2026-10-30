@@ -12,7 +12,7 @@
 
 - PR #2 已于 2026-10-30 合入 `main`，随后 Task 0 PR #5 于 2026-10-31 以普通 merge 合入，当前基线提交为 `48636674bcc3c812bdc97cbc815e0474de3b5cf6`。Task 0 合并前 Windows 全套为 **386 passed**；PR #5 的两次 Windows 必需检查及 Ubuntu 兼容检查均成功（Actions runs `41092577087`、`41092639913`）。重复 PR #1 已关闭；其 Phase 2 内容已在 main。
 - `jiangnan_agent.generators.components` 已有 `generate_wall`、`generate_door`、`generate_window`、`generate_column` 和 `generate_beam`；hall 固定生成一个中置门与正面窗，corridor 当前为开敞廊架。
-- Task 0 已修复 SQLite 模块目录与 Python Asset Registry 的版本发现及同步，保留旧记录；当前 hall/corridor 的资产版本为 v4、参数 Schema 为 v3。GEN-3 将新增资产 v5 与参数 Schema v4。
+- Task 0 已修复 SQLite 模块目录与 Python Asset Registry 的版本发现及同步，保留旧记录；GEN-3 将保留 hall/corridor 的资产 v1–v4 和参数 Schema v1–v3，并新增资产 v5、参数 Schema v4 与知识库 v5。
 - Mine2Blend 和用户指定的 Blender 路径在本机存在；`workspace/` 含既有用户数据，后续只新增唯一命名的工程、导出与预览，不覆盖或清理已有内容。
 
 ## 目标与范围
@@ -45,10 +45,10 @@
 
 ### 1. 资产与参数版本
 
-- 将已有目录作为历史快照保留；新增 hall/corridor 参数 schema v4、Asset Registry v5，以及对应的知识库项目代码来源记录。创作预设来源使用 `minecraft_adaptation`，不引用 DB-2 候选构件。
+- 将已有目录作为历史快照保留；新增 hall/corridor 参数 schema v4（含可选 `facade_profile`）、Asset Registry v5，以及对应的知识库项目代码来源记录。typed profile JSON 通过标准化 codec 转换；创作预设来源使用 `minecraft_adaptation`，不引用 DB-2 候选构件。
 - SQLite 模块目录按目录版本自动发现。实现中的 hall/corridor 以 Python Asset Registry 为准；同步当前快照中的 v4、v5 记录，保留现有 v3 记录且不改写旧版本。计划模块仍从最新 SQLite module catalog 读取。资产及模块快照按版本不可变；预设独立登记，并可与 GEN-2 屋顶 Profile 组合。
 - `get_module_definition(id)` 继续默认返回最新版本，显式版本读取仍可用。`list_modules()` 默认返回每个 ID 的最新记录，可显式请求历史版本；保留 `include_planned` 行为。若现有表结构足以表达，不增加无必要的数据库迁移。
-- LibraryService 自动读取版本化样式目录；新增三种 façade 创作 Profile 的可查询记录。每个配置保留版本、生成器来源、适用设计目标和 Schema 引用。
+- LibraryService 自动读取版本化样式目录；新增三种 façade 创作 Profile 的可查询记录，并校验样式引用的 Profile ID/版本存在。每个配置保留版本、生成器来源、适用设计目标和 Schema 引用。新样式不绑定 DB-2 的未核验参考构件。
 
 ### 2. 立面 Profile 与几何生成
 

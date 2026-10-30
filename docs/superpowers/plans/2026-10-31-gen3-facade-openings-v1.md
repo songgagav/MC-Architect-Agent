@@ -231,17 +231,18 @@
 - Modify: `jiangnan_agent/library/service.py`
 - Modify: `tests/test_parameter_registry.py`
 - Modify: `tests/test_knowledge_parametric_foundation.py`
+- Modify: `tests/test_library_cli.py`
 - Modify: `tests/test_library_database.py`
 
-- [ ] **Write failing registry tests first**
+- [x] **Write failing registry tests first**
   - Test asset v5/schema v4 loading and explicit v4 compatibility.
   - Test each preset is independently registered, deterministic, can combine with each GEN-2 roof preset, and contains only verified block-state configurations.
   - Test style query returns the three creative profiles with proper version/status; assert no DB-2 candidate component is used.
   - Test old asset/schema snapshots and module history are unchanged.
-- [ ] Run focused tests and confirm failures.
-- [ ] Add v4 schema/v5 asset and code-source snapshots plus three style records; make style catalog version discovery automatic.
-- [ ] Connect `facade_profile` parsing to `resolve_parameters`, and ensure JSON values are canonicalized before generator construction.
-- [ ] Run parameter/library tests and full suite; confirm schema v1-v3 and current Task 0 rows remain readable.
+- [x] Run focused tests and confirm failures.
+- [x] Add v4 schema/v5 asset and code-source snapshots plus three style records; make style catalog version discovery automatic.
+- [x] Connect `facade_profile` parsing to `resolve_parameters`, and ensure JSON values are canonicalized before generator construction.
+- [x] Run parameter/library tests and full Windows suite; schema v1-v3 and prior asset rows remain readable. Result: **465 passed**.
 - [ ] Commit versioned schemas and style presets: `feat: register gen3 façade assets and styles`.
 
 ### Task 6: Project JSON, history, and default compatibility

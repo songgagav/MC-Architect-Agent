@@ -1,0 +1,290 @@
+{
+  "version": 4,
+  "minecraft_version": "1.21.5",
+  "source_category": "minecraft_adaptation",
+  "historical_claims": false,
+  "presets": [
+    {
+      "profile_id": "jiangnan_whitewall_timber",
+      "version": 1,
+      "wall": {
+        "thickness": 1,
+        "expand_direction": "inward",
+        "layer_roles": [
+          "wall"
+        ]
+      },
+      "door": {
+        "width": 2,
+        "height": 2,
+        "frame_thickness": 1,
+        "door_material_role": "door",
+        "frame_material_role": "column",
+        "lintel_material_role": "beam",
+        "lintel": true
+      },
+      "window": {
+        "width": 2,
+        "height": 2,
+        "sill_height": 1,
+        "frame_thickness": 0,
+        "frame_material_role": "beam",
+        "glazing_material_role": "window",
+        "lattice_material_role": "lattice",
+        "lattice_style": "grid"
+      },
+      "timber": {
+        "exterior_posts": true,
+        "column_bases": true,
+        "column_capitals": false,
+        "beam_layers": 1,
+        "trim_material_role": "beam"
+      },
+      "openings": [
+        {
+          "opening_id": "main-entry",
+          "face": "front",
+          "kind": "door",
+          "connection_use": "primary_entry",
+          "segment_index": 1,
+          "offset": 1,
+          "sill_offset": 0
+        },
+        {
+          "opening_id": "front-window-left",
+          "face": "front",
+          "kind": "window",
+          "connection_use": "non_connecting",
+          "segment_index": 0,
+          "offset": 1,
+          "sill_offset": 1
+        },
+        {
+          "opening_id": "front-window-right",
+          "face": "front",
+          "kind": "window",
+          "connection_use": "non_connecting",
+          "segment_index": 2,
+          "offset": 1,
+          "sill_offset": 1
+        },
+        {
+          "opening_id": "left-window",
+          "face": "left",
+          "kind": "window",
+          "connection_use": "non_connecting",
+          "segment_index": 0,
+          "offset": 2,
+          "sill_offset": 1
+        },
+        {
+          "opening_id": "right-window",
+          "face": "right",
+          "kind": "window",
+          "connection_use": "non_connecting",
+          "segment_index": 0,
+          "offset": 2,
+          "sill_offset": 1
+        }
+      ],
+      "materials": {
+        "wall": "minecraft:calcite",
+        "door": "minecraft:spruce_door",
+        "column": "minecraft:stripped_dark_oak_log",
+        "beam": "minecraft:dark_oak_planks",
+        "window": "minecraft:white_stained_glass_pane",
+        "lattice": "minecraft:dark_oak_fence",
+        "trim": "minecraft:dark_oak_planks"
+      },
+      "enclosed_faces": []
+    },
+    {
+      "profile_id": "huizhou_graybrick_entry",
+      "version": 1,
+      "wall": {
+        "thickness": 1,
+        "expand_direction": "inward",
+        "layer_roles": [
+          "wall"
+        ]
+      },
+      "door": {
+        "width": 2,
+        "height": 2,
+        "frame_thickness": 1,
+        "door_material_role": "door",
+        "frame_material_role": "column",
+        "lintel_material_role": "beam",
+        "lintel": true
+      },
+      "window": {
+        "width": 2,
+        "height": 2,
+        "sill_height": 1,
+        "frame_thickness": 0,
+        "frame_material_role": "beam",
+        "glazing_material_role": "window",
+        "lattice_material_role": "lattice",
+        "lattice_style": "vertical"
+      },
+      "timber": {
+        "exterior_posts": true,
+        "column_bases": true,
+        "column_capitals": true,
+        "beam_layers": 1,
+        "trim_material_role": "beam"
+      },
+      "openings": [
+        {
+          "opening_id": "main-entry",
+          "face": "front",
+          "kind": "door",
+          "connection_use": "primary_entry",
+          "segment_index": 1,
+          "offset": 1,
+          "sill_offset": 0
+        },
+        {
+          "opening_id": "front-window-left",
+          "face": "front",
+          "kind": "window",
+          "connection_use": "non_connecting",
+          "segment_index": 0,
+          "offset": 1,
+          "sill_offset": 1
+        },
+        {
+          "opening_id": "front-window-right",
+          "face": "front",
+          "kind": "window",
+          "connection_use": "non_connecting",
+          "segment_index": 2,
+          "offset": 1,
+          "sill_offset": 1
+        },
+        {
+          "opening_id": "left-window",
+          "face": "left",
+          "kind": "window",
+          "connection_use": "non_connecting",
+          "segment_index": 0,
+          "offset": 2,
+          "sill_offset": 1
+        },
+        {
+          "opening_id": "right-window",
+          "face": "right",
+          "kind": "window",
+          "connection_use": "non_connecting",
+          "segment_index": 0,
+          "offset": 2,
+          "sill_offset": 1
+        }
+      ],
+      "materials": {
+        "wall": "minecraft:light_gray_terracotta",
+        "door": "minecraft:dark_oak_door",
+        "column": "minecraft:stripped_dark_oak_log",
+        "beam": "minecraft:deepslate_bricks",
+        "window": "minecraft:gray_stained_glass_pane",
+        "lattice": "minecraft:iron_bars",
+        "trim": "minecraft:polished_deepslate"
+      },
+      "enclosed_faces": []
+    },
+    {
+      "profile_id": "garden_open_gallery",
+      "version": 1,
+      "wall": {
+        "thickness": 1,
+        "expand_direction": "outward",
+        "layer_roles": [
+          "wall"
+        ]
+      },
+      "door": {
+        "width": 2,
+        "height": 2,
+        "frame_thickness": 0,
+        "door_material_role": "door",
+        "frame_material_role": "column",
+        "lintel_material_role": "beam",
+        "lintel": false
+      },
+      "window": {
+        "width": 2,
+        "height": 2,
+        "sill_height": 1,
+        "frame_thickness": 0,
+        "frame_material_role": "beam",
+        "glazing_material_role": "window",
+        "lattice_material_role": "lattice",
+        "lattice_style": "cross"
+      },
+      "timber": {
+        "exterior_posts": true,
+        "column_bases": false,
+        "column_capitals": false,
+        "beam_layers": 1,
+        "trim_material_role": "beam"
+      },
+      "openings": [
+        {
+          "opening_id": "main-entry",
+          "face": "front",
+          "kind": "door",
+          "connection_use": "primary_entry",
+          "segment_index": 1,
+          "offset": 1,
+          "sill_offset": 0
+        },
+        {
+          "opening_id": "front-window-left",
+          "face": "front",
+          "kind": "window",
+          "connection_use": "non_connecting",
+          "segment_index": 0,
+          "offset": 1,
+          "sill_offset": 1
+        },
+        {
+          "opening_id": "front-window-right",
+          "face": "front",
+          "kind": "window",
+          "connection_use": "non_connecting",
+          "segment_index": 2,
+          "offset": 1,
+          "sill_offset": 1
+        },
+        {
+          "opening_id": "left-window",
+          "face": "left",
+          "kind": "window",
+          "connection_use": "non_connecting",
+          "segment_index": 0,
+          "offset": 2,
+          "sill_offset": 1
+        },
+        {
+          "opening_id": "right-window",
+          "face": "right",
+          "kind": "window",
+          "connection_use": "non_connecting",
+          "segment_index": 0,
+          "offset": 2,
+          "sill_offset": 1
+        }
+      ],
+      "materials": {
+        "wall": "minecraft:oak_planks",
+        "door": "minecraft:oak_door",
+        "column": "minecraft:stripped_oak_log",
+        "beam": "minecraft:oak_planks",
+        "window": "minecraft:glass_pane",
+        "lattice": "minecraft:oak_fence",
+        "trim": "minecraft:oak_planks"
+      },
+      "enclosed_faces": []
+    }
+  ]
+}

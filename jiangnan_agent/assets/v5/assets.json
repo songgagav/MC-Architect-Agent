@@ -1,0 +1,214 @@
+{
+  "version": 5,
+  "assets": [
+    {
+      "asset_id": "jiangnan.hall",
+      "version": 1,
+      "kind": "hall",
+      "parameter_schema_id": "hall",
+      "parameter_schema_version": 1,
+      "knowledge_base_version": 1,
+      "source_id": "generator.hall.v1",
+      "anchor_interfaces": [
+        "front",
+        "rear",
+        "court_west_front",
+        "court_west_rear",
+        "court_east_front",
+        "court_east_rear"
+      ]
+    },
+    {
+      "asset_id": "jiangnan.corridor",
+      "version": 1,
+      "kind": "corridor",
+      "parameter_schema_id": "corridor",
+      "parameter_schema_version": 1,
+      "knowledge_base_version": 1,
+      "source_id": "generator.corridor.v1",
+      "anchor_interfaces": [
+        "start",
+        "end"
+      ]
+    },
+    {
+      "asset_id": "jiangnan.hall",
+      "version": 2,
+      "kind": "hall",
+      "parameter_schema_id": "hall",
+      "parameter_schema_version": 1,
+      "knowledge_base_version": 2,
+      "source_id": "generator.hall.v1",
+      "anchor_interfaces": [
+        "front",
+        "rear",
+        "court_west_front",
+        "court_west_rear",
+        "court_east_front",
+        "court_east_rear"
+      ]
+    },
+    {
+      "asset_id": "jiangnan.corridor",
+      "version": 2,
+      "kind": "corridor",
+      "parameter_schema_id": "corridor",
+      "parameter_schema_version": 1,
+      "knowledge_base_version": 2,
+      "source_id": "generator.corridor.v1",
+      "anchor_interfaces": [
+        "start",
+        "end"
+      ]
+    },
+    {
+      "asset_id": "jiangnan.hall",
+      "version": 3,
+      "kind": "hall",
+      "parameter_schema_id": "hall",
+      "parameter_schema_version": 2,
+      "knowledge_base_version": 3,
+      "source_id": "generator.hall.v1",
+      "anchor_interfaces": [
+        "front",
+        "rear",
+        "court_west_front",
+        "court_west_rear",
+        "court_east_front",
+        "court_east_rear"
+      ],
+      "minecraft_version": "1.21.5",
+      "region_ids": [
+        "huizhou_core"
+      ],
+      "region_association_kind": "design_target",
+      "region_association_note": "Design target only; this association does not validate historical authenticity or dimensions.",
+      "knowledge_rule_ids": [
+        "hui-village-layout-and-architecture"
+      ]
+    },
+    {
+      "asset_id": "jiangnan.corridor",
+      "version": 3,
+      "kind": "corridor",
+      "parameter_schema_id": "corridor",
+      "parameter_schema_version": 2,
+      "knowledge_base_version": 3,
+      "source_id": "generator.corridor.v1",
+      "anchor_interfaces": [
+        "start",
+        "end"
+      ],
+      "minecraft_version": "1.21.5",
+      "region_ids": [
+        "huizhou_core",
+        "jiangnan_suzhou"
+      ],
+      "region_association_kind": "design_target",
+      "region_association_note": "Design target only; this association does not validate historical authenticity or dimensions.",
+      "knowledge_rule_ids": [
+        "hui-street-building-water-context",
+        "suzhou-garden-elements-context"
+      ]
+    },
+    {
+      "asset_id": "jiangnan.hall",
+      "version": 4,
+      "kind": "hall",
+      "parameter_schema_id": "hall",
+      "parameter_schema_version": 3,
+      "knowledge_base_version": 4,
+      "source_id": "generator.roof-eaves.v2",
+      "anchor_interfaces": [
+        "front",
+        "rear",
+        "court_west_front",
+        "court_west_rear",
+        "court_east_front",
+        "court_east_rear"
+      ],
+      "minecraft_version": "1.21.5",
+      "region_ids": [
+        "huizhou_core"
+      ],
+      "region_association_kind": "design_target",
+      "region_association_note": "Design target only; this association does not validate historical authenticity or dimensions.",
+      "knowledge_rule_ids": [
+        "hui-village-layout-and-architecture"
+      ]
+    },
+    {
+      "asset_id": "jiangnan.corridor",
+      "version": 4,
+      "kind": "corridor",
+      "parameter_schema_id": "corridor",
+      "parameter_schema_version": 3,
+      "knowledge_base_version": 4,
+      "source_id": "generator.roof-eaves.v2",
+      "anchor_interfaces": [
+        "start",
+        "end"
+      ],
+      "minecraft_version": "1.21.5",
+      "region_ids": [
+        "huizhou_core",
+        "jiangnan_suzhou"
+      ],
+      "region_association_kind": "design_target",
+      "region_association_note": "Design target only; this association does not validate historical authenticity or dimensions.",
+      "knowledge_rule_ids": [
+        "hui-street-building-water-context",
+        "suzhou-garden-elements-context"
+      ]
+    },
+    {
+      "asset_id": "jiangnan.hall",
+      "version": 5,
+      "kind": "hall",
+      "parameter_schema_id": "hall",
+      "parameter_schema_version": 4,
+      "knowledge_base_version": 5,
+      "source_id": "generator.facade.v1",
+      "anchor_interfaces": [
+        "front",
+        "rear",
+        "court_west_front",
+        "court_west_rear",
+        "court_east_front",
+        "court_east_rear"
+      ],
+      "minecraft_version": "1.21.5",
+      "region_ids": [
+        "huizhou_core"
+      ],
+      "region_association_kind": "design_target",
+      "region_association_note": "Design target only; this association does not validate historical authenticity or dimensions.",
+      "knowledge_rule_ids": [
+        "facade-profile-minecraft-creative-config"
+      ]
+    },
+    {
+      "asset_id": "jiangnan.corridor",
+      "version": 5,
+      "kind": "corridor",
+      "parameter_schema_id": "corridor",
+      "parameter_schema_version": 4,
+      "knowledge_base_version": 5,
+      "source_id": "generator.facade.v1",
+      "anchor_interfaces": [
+        "start",
+        "end"
+      ],
+      "minecraft_version": "1.21.5",
+      "region_ids": [
+        "huizhou_core",
+        "jiangnan_suzhou"
+      ],
+      "region_association_kind": "design_target",
+      "region_association_note": "Design target only; this association does not validate historical authenticity or dimensions.",
+      "knowledge_rule_ids": [
+        "facade-profile-minecraft-creative-config"
+      ]
+    }
+  ]
+}
