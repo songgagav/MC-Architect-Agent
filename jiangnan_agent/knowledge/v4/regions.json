@@ -1,0 +1,57 @@
+{
+  "version": 4,
+  "regions": [
+    {
+      "region_id": "huizhou_core",
+      "label": "徽州核心参考区（西递、宏村）",
+      "status": "active",
+      "scope": "当前只覆盖 UNESCO 所列皖南古村落西递、宏村的场地级描述；不外推至全部徽州建筑，不定义历史尺寸。",
+      "source_ids": [
+        "unesco.xidi-hongcun.ouval"
+      ],
+      "notes": "Active rules are documented-site facts and context. They are not prescriptive building dimensions or construction instructions."
+    },
+    {
+      "region_id": "jiangnan_suzhou",
+      "label": "江南苏州园林参考区",
+      "status": "active",
+      "scope": "当前只覆盖 UNESCO 所列苏州古典园林的园林级描述；不外推至苏州所有民居或建筑构造。",
+      "source_ids": [
+        "unesco.suzhou-gardens.ouval"
+      ],
+      "notes": "Active rules describe the listed garden corpus; no unverified dimensional or structural standard is inferred."
+    },
+    {
+      "region_id": "jiaxing_huzhou_water_towns",
+      "label": "嘉兴/湖州水乡",
+      "status": "catalog_only",
+      "scope": "候选地域目录项；未启用知识规则。",
+      "source_ids": [],
+      "notes": "Enable only after source and regional scope review."
+    },
+    {
+      "region_id": "ningbo_east_zhejiang",
+      "label": "宁波/浙东",
+      "status": "catalog_only",
+      "scope": "候选地域目录项；未启用知识规则。",
+      "source_ids": [],
+      "notes": "Enable only after source and regional scope review."
+    },
+    {
+      "region_id": "yangzhou_canal",
+      "label": "扬州/运河地区",
+      "status": "catalog_only",
+      "scope": "候选地域目录项；未启用知识规则。",
+      "source_ids": [],
+      "notes": "Enable only after source and regional scope review."
+    },
+    {
+      "region_id": "shanghai_songjiang",
+      "label": "上海/松江",
+      "status": "catalog_only",
+      "scope": "候选地域目录项；未启用知识规则。",
+      "source_ids": [],
+      "notes": "Enable only after source and regional scope review."
+    }
+  ]
+}

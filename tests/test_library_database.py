@@ -383,10 +383,10 @@ def test_knowledge_registry_is_versioned_and_current_profile_queries_report_vers
         versions = connection.execute(
             "SELECT version, content_sha256 FROM knowledge_registry_versions ORDER BY version"
         ).fetchall()
-    assert [(int(row["version"]), len(row["content_sha256"])) for row in versions] == [(3, 64)]
-    assert all(region["registry_version"] == 3 for region in service.list_regions())
-    assert service.list_knowledge_rules(region="huizhou_core")["knowledge_base_version"] == 3
-    assert service.list_sources()[0]["registry_version"] == 3
+    assert [(int(row["version"]), len(row["content_sha256"])) for row in versions] == [(4, 64)]
+    assert all(region["registry_version"] == 4 for region in service.list_regions())
+    assert service.list_knowledge_rules(region="huizhou_core")["knowledge_base_version"] == 4
+    assert service.list_sources()[0]["registry_version"] == 4
 
 
 def test_database_foreign_keys_and_module_version_history_are_enforced(tmp_path: Path) -> None:
@@ -433,7 +433,7 @@ def test_database_upgrades_an_existing_v1_file_in_order(tmp_path: Path) -> None:
     service = LibraryService(LibraryDatabase(path), project_root=tmp_path)
 
     assert service.initialize() == 4
-    assert service.list_knowledge_rules(region="huizhou_core")["knowledge_base_version"] == 3
+    assert service.list_knowledge_rules(region="huizhou_core")["knowledge_base_version"] == 4
 
 
 def test_versioned_module_parameter_and_style_definitions_are_immutable(tmp_path: Path) -> None:

@@ -243,6 +243,73 @@ class RoofPreset:
         object.__setattr__(self, "preset_id", preset_id)
 
 
+def _profile_mapping(value: object, name: str, allowed: set[str]) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{name} must be a JSON object")
+    unknown = set(value) - allowed
+    if unknown:
+        raise ValueError(f"unknown {name} field: {sorted(unknown)[0]}")
+    return value
+
+
+def roof_profile_from_mapping(value: object) -> RoofProfile:
+    config = _profile_mapping(value, "roof_profile", {"ridge_height", "section_points", "surface_bands"})
+    bands = config.get("surface_bands")
+    if not isinstance(bands, (list, tuple)):
+        raise ValueError("roof_profile.surface_bands must be an array")
+    try:
+        return RoofProfile(
+            ridge_height=config["ridge_height"],
+            section_points=config["section_points"],
+            surface_bands=tuple(
+                SurfaceBand(**_profile_mapping(band, "surface band", {"start", "end", "form", "material_role"}))
+                for band in bands
+            ),
+        )
+    except KeyError as exc:
+        raise ValueError(f"roof_profile is missing required field {exc.args[0]!r}") from exc
+    except TypeError as exc:
+        raise ValueError(f"invalid roof_profile fields: {exc}") from exc
+
+
+def eave_profile_from_mapping(value: object) -> EaveProfile:
+    config = _profile_mapping(
+        value,
+        "eave_profile",
+        {
+            "side_overhang",
+            "gable_end_treatment",
+            "gable_end_projection",
+            "thickness",
+            "layer_roles",
+            "decoration_role",
+            "decoration_spacing",
+        },
+    )
+    try:
+        return EaveProfile(**config)
+    except TypeError as exc:
+        raise ValueError(f"invalid eave_profile fields: {exc}") from exc
+
+
+def ridge_profile_from_mapping(value: object) -> RidgeProfile:
+    config = _profile_mapping(
+        value,
+        "ridge_profile",
+        {"cap_width", "cap_height", "material_role", "decoration_role", "decoration_spacing"},
+    )
+    try:
+        return RidgeProfile(**config)
+    except TypeError as exc:
+        raise ValueError(f"invalid ridge_profile fields: {exc}") from exc
+
+
+def material_palette_from_mapping(value: object) -> MaterialPalette:
+    if not isinstance(value, Mapping):
+        raise ValueError("material_palette must be a JSON object mapping roles to block states")
+    return MaterialPalette(value)
+
+
 def _round_fraction_half_up(value: Fraction) -> int:
     quotient, remainder = divmod(value.numerator, value.denominator)
     return quotient + (1 if remainder * 2 >= value.denominator else 0)

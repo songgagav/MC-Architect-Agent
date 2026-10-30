@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from types import MappingProxyType
 
@@ -19,7 +19,17 @@ from .components import (
     generate_wall,
     generate_window,
 )
-from .roof_profiles import EaveProfile, MaterialPalette, RidgeProfile, RoofProfile
+from .roof_profiles import (
+    EaveProfile,
+    MaterialPalette,
+    RidgeProfile,
+    RoofProfile,
+    eave_profile_from_mapping,
+    material_palette_from_mapping,
+    ridge_profile_from_mapping,
+    roof_profile_from_mapping,
+    sample_roof_section,
+)
 
 DEFAULT_HALL_MATERIALS: dict[str, str] = {
     "plinth": "minecraft:smooth_stone",
@@ -150,6 +160,7 @@ class HallParameters:
     _eaves_explicit: bool = field(default=False, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        _coerce_profile_fields(self)
         bay_count = _require_integer(self.bay_count, "bay_count", 3)
         bay_width = _require_integer(self.bay_width, "bay_width", 1)
         depth = _require_integer(self.depth, "depth", 5)
@@ -180,6 +191,8 @@ class HallParameters:
             self.ridge_profile,
             self.material_palette,
         )
+        if self.roof_profile is not None:
+            sample_roof_section((depth - 1) // 2, self.roof_profile.ridge_height, self.roof_profile.section_points)
         normalized_materials = _checked_materials(self.materials, DEFAULT_HALL_MATERIALS)
         _validate_palette_aliases(normalized_materials, self.material_palette)
         object.__setattr__(self, "roof_rise", roof_rise)
@@ -208,6 +221,7 @@ class CorridorParameters:
     _eaves_explicit: bool = field(default=False, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        _coerce_profile_fields(self)
         length = _require_integer(self.length, "length", 3)
         width = _require_integer(self.width, "width", 3)
         _require_integer(self.column_spacing, "column_spacing", 1)
@@ -230,6 +244,8 @@ class CorridorParameters:
             self.ridge_profile,
             self.material_palette,
         )
+        if self.roof_profile is not None:
+            sample_roof_section((width - 1) // 2, self.roof_profile.ridge_height, self.roof_profile.section_points)
         normalized_materials = _checked_materials(self.materials, DEFAULT_CORRIDOR_MATERIALS)
         _validate_palette_aliases(normalized_materials, self.material_palette)
         object.__setattr__(self, "roof_rise", roof_rise)
@@ -237,6 +253,26 @@ class CorridorParameters:
         object.__setattr__(self, "materials", normalized_materials)
         object.__setattr__(self, "_roof_rise_explicit", roof_rise_explicit)
         object.__setattr__(self, "_eaves_explicit", eaves_explicit)
+
+
+def _coerce_profile_fields(parameters: HallParameters | CorridorParameters) -> None:
+    for name, parser in (
+        ("roof_profile", roof_profile_from_mapping),
+        ("eave_profile", eave_profile_from_mapping),
+        ("ridge_profile", ridge_profile_from_mapping),
+        ("material_palette", material_palette_from_mapping),
+    ):
+        value = getattr(parameters, name)
+        if value is not None and not isinstance(
+            value,
+            {
+                "roof_profile": RoofProfile,
+                "eave_profile": EaveProfile,
+                "ridge_profile": RidgeProfile,
+                "material_palette": MaterialPalette,
+            }[name],
+        ):
+            object.__setattr__(parameters, name, parser(value))
 
 
 def _validate_profile_inputs(

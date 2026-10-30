@@ -93,6 +93,9 @@
 
 **Files:**
 - Modify: `jiangnan_agent/parameters/registry.py`
+- Modify: `jiangnan_agent/generators/hall.py` (mapping-to-profile normalization and resolve-time section validation)
+- Modify: `jiangnan_agent/generators/roof_profiles.py` (validated profile mapping parsers)
+- Modify: `jiangnan_agent/assembly/adapters.py` (JSON-safe profile serialization for legacy modules)
 - Create: `jiangnan_agent/parameters/v3/hall.json`
 - Create: `jiangnan_agent/parameters/v3/corridor.json`
 - Create: `jiangnan_agent/parameters/v3/roof_profiles.json`
@@ -101,6 +104,8 @@
 - Create: `jiangnan_agent/knowledge/v4/rules.json`
 - Create: `jiangnan_agent/knowledge/v4/regions.json`
 - Modify: `tests/test_knowledge_parametric_foundation.py`
+- Modify: `tests/test_library_cli.py`
+- Modify: `tests/test_library_database.py`
 - Create: `tests/test_parameter_registry.py`
 
 **Interfaces:**
@@ -110,16 +115,18 @@
 - `list_roof_presets() -> tuple[str, ...]` and `load_roof_preset(preset_id: str) -> RoofPreset` expose the versioned creative presets through Python.
 - Legacy inputs map to canonical values: `roof_rise` / `roof_section.rise` to `roof_profile.ridge_height`; `eaves` to side overhang and gable-end projection; `materials.roof` and `materials.eaves` to palette roles. A legacy `roof_section` object is accepted only when its profile is `symmetric_gable`. Explicit equal forms are accepted; explicit conflicts raise `ParameterConflictError` before defaults apply.
 
-- [ ] **Step 1: Write failing schema/registry tests** for v4 asset binding, v1-v3 pinned asset loading, all three preset query results, provenance categories, and explicit legacy/profile equivalence or conflict.
-- [ ] **Step 2: Run `pytest tests/test_parameter_registry.py tests/test_knowledge_parametric_foundation.py -q`** and confirm failures identify missing v4/schema behavior.
-- [ ] **Step 3: Implement schema v3, registry v4, and knowledge base v4 snapshots**; add only project-code sources, retain existing regions/rules, and normalize aliases before defaults.
-- [ ] **Step 4: Run the targeted registry tests** and confirm old asset/project metadata remains readable while current assets resolve to schema v3.
-- [ ] **Step 5: Commit** as `feat: register roof profiles and creative presets`.
+- [x] **Step 1: Write failing schema/registry tests** for v4 asset binding, v1-v3 pinned asset loading, all three preset query results, provenance categories, project round-trip/history, and explicit legacy/profile equivalence or conflict.
+- [x] **Step 2: Run `pytest tests/test_parameter_registry.py tests/test_knowledge_parametric_foundation.py -q`** and confirm failures identify missing v4/schema behavior; initial RED had 7 expected registry failures and 31 existing passes.
+- [x] **Step 3: Implement schema v3, registry v4, and knowledge base v4 snapshots**; add only project-code sources, retain existing regions/rules, normalize aliases before defaults, and preserve profile data through Module/ProjectEditor serialization.
+- [x] **Step 4: Run the targeted registry tests** and confirm old asset/project metadata remains readable while current assets resolve to schema v3: 40 passed.
+- [x] **Step 5: Commit** as `feat: register roof profiles and creative presets`.
 
 ### Task 5: User documentation and full regression
 
 **Files:**
 - Modify: `README.md`
+- Modify: `docs/parameter-registry.md`
+- Modify: `docs/knowledge-regions.md`
 - Create: `docs/roof-eaves-v2.md`
 
 **Interfaces:**

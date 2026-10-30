@@ -31,7 +31,7 @@ def test_library_cli_initializes_and_lists_regions(tmp_path, monkeypatch, capsys
     )
     assert main() == 0
     sources = json.loads(capsys.readouterr().out)
-    assert sources and all(source["registry_version"] == 3 for source in sources)
+    assert sources and all(source["registry_version"] == 4 for source in sources)
 
 
 def test_library_backup_does_not_create_a_database_as_a_side_effect(tmp_path, monkeypatch, capsys) -> None:
