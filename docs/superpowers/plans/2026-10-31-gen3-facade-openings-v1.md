@@ -243,7 +243,7 @@
 - [x] Add v4 schema/v5 asset and code-source snapshots plus three style records; make style catalog version discovery automatic.
 - [x] Connect `facade_profile` parsing to `resolve_parameters`, and ensure JSON values are canonicalized before generator construction.
 - [x] Run parameter/library tests and full Windows suite; schema v1-v3 and prior asset rows remain readable. Result: **465 passed**.
-- [ ] Commit versioned schemas and style presets: `feat: register gen3 façade assets and styles`.
+- [x] Commit versioned schemas and style presets: `feat: register gen3 façade assets and styles` (`1011f3c`).
 
 ### Task 6: Project JSON, history, and default compatibility
 
@@ -264,7 +264,7 @@
 - [x] Run focused tests and confirm failures.
 - [x] Implement adapter JSON mapping and minimal editor changes; keep project format top-level structure unchanged.
 - [x] Run project/history/readme tests and confirm pass: **69 passed**.
-- [ ] Commit compatibility and history coverage: `test: cover façade project history compatibility`.
+- [x] Commit compatibility and history coverage: `test: cover façade project history compatibility` (`8e8c76d`).
 
 ### Task 7: Generate three GEN-3 buildings, inspect views, and submit final PR
 
@@ -275,13 +275,13 @@
 - Modify: `README.md`
 - Modify: `docs/windows-acceptance.md`
 
-- [ ] **Write failing example/export tests first**
+- [x] **Write failing example/export tests first**
   - Test three complete example projects use the three façade presets, produce Sponge v3 files, read back identically, and refuse overwriting destinations.
   - Test the set includes 3-bay and 5-bay halls, all three GEN-2 roof presets across examples, and the open-gallery/corridor enclosure scenario in focused tests.
-- [ ] Run focused tests and confirm failures.
-- [ ] Implement the reproducible example runner and docs for profile selection, opening IDs/anchor rules, and safe generation.
-- [ ] Generate actual three example projects, `.schem` files, and Blender top/front/side/perspective previews in fresh unique `workspace/` paths.
-- [ ] Inspect every view manually; record geometry, material, roof/wall/timber joins, collision findings, tool versions, schematic readback, and game-test `pending` status in the report.
+- [x] Run focused tests and confirm failures.
+- [x] Implement the reproducible example runner and docs for profile selection, opening IDs/anchor rules, and safe generation.
+- [x] Generate actual three example projects, `.schem` files, and Blender top/front/side/perspective previews in fresh unique `workspace/` paths.
+- [x] Inspect every view manually; record geometry, material, roof/wall/timber joins, collision findings, tool versions, schematic readback, and game-test `pending` status in the report.
 - [ ] Run the targeted MCP stdio test, all new focused tests, full Windows pytest, and `git diff --check`.
 - [ ] Request an independent final code review; fix any findings with tests before publishing.
 - [ ] Commit the reproducible examples and final acceptance report: `docs: add gen3 façade examples and validation`.

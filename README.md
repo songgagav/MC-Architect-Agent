@@ -184,6 +184,23 @@ jiangnan preview `
 
 可增加 `--compare-before <旧版本.schem>` 同时渲染新旧版本，并生成 `comparison.json`，其中包含按方块状态计算的新增、删除、替换和变化数量。每次预览另生成 `preview.json`，记录输入、尺寸、工具版本、相机范围和图片位置。
 
+### GEN-3 立面与门窗示例
+
+在 Windows PowerShell 中可以一次生成三组厅堂工程、Sponge v3 投影和 Mine2Blend/Blender 四视图：
+
+```powershell
+\.venv\Scripts\python.exe -m examples.gen3_facade_examples `
+  --output-root workspace `
+  --mine2blend-root "E:\MCbuild\Mine2Blend\mcblock_mine2blend" `
+  --blender "D:\SteamLibrary\steamapps\common\Blender\blender.exe"
+```
+
+每次执行会新建带时间戳和随机后缀的 `workspace\gen3-facade-v1-*` 目录；目标存在时会报错，不覆盖旧工程或预览。加 `--build-only` 可只生成工程与 `.schem`，不启动渲染。终端会打印每个工程、投影及四张视图的路径。
+
+示例组合 `jiangnan_whitewall_timber`、`huizhou_graybrick_entry`、`garden_open_gallery` 与三种 GEN-2 屋顶预设。5 开间示例会把 `primary_entry` 放在中间开间，并把两侧正窗对称移至相邻开间；园林示例对预设做局部创作覆盖，使用 3×2 竖格正窗并移除侧面窗。工程仍保存稳定的 `opening_id`；只有 `primary_entry` 决定 hall 的既有 `front` 锚点，普通门窗不参与连接锚点计算。覆盖仅写入该示例工程，不修改已登记的预设版本。
+
+三组实渲染、人工视图审核与待实机验收状态见 [`docs/gen3-facade-validation-report.md`](docs/gen3-facade-validation-report.md)。
+
 ## 模块组合示例
 
 ```powershell

@@ -298,3 +298,35 @@ def test_corridor_profile_cannot_close_connection_end_faces() -> None:
 
     with pytest.raises(ValueError, match="start/end connection faces"):
         CorridorParameters(facade_profile=profile)
+
+
+def test_garden_open_gallery_preset_can_be_adapted_to_an_enclosed_corridor_module() -> None:
+    from dataclasses import replace
+
+    from jiangnan_agent.assembly.adapters import corridor_module
+    from jiangnan_agent.assets import module_from_asset
+    from jiangnan_agent.generators.facade_profiles import (
+        FacadeOpening,
+        facade_profile_to_mapping,
+    )
+    from jiangnan_agent.parameters import load_facade_preset
+
+    preset = load_facade_preset("garden_open_gallery")
+    gallery = replace(
+        preset,
+        openings=(
+            FacadeOpening("gallery.front-window", "front", "window", "non_connecting", 0, 0, 0),
+            FacadeOpening("gallery.rear-window", "rear", "window", "non_connecting", 0, 0, 0),
+        ),
+        enclosed_faces=("front", "rear"),
+    )
+    module = module_from_asset(
+        "garden-corridor",
+        "jiangnan.corridor",
+        {"facade_profile": facade_profile_to_mapping(gallery)},
+    )
+    open_default = corridor_module("open-default", CorridorParameters())
+
+    assert module.parameters["facade_profile"]["enclosed_faces"] == ("front", "rear")
+    assert tuple(anchor.name for anchor in module.anchors) == ("start", "end")
+    assert module.model.blocks != open_default.model.blocks

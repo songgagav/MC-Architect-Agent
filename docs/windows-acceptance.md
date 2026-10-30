@@ -65,6 +65,23 @@ save_project(project, Path(r"$projectPath"))
 
 本次已在本机使用 asset v3 生成 522 方块的 `18 × 10 × 9` hall，并由 Mine2Blend `spike-0.1.1` 与 Blender 5.2.3 LTS 产生四张视图。未加入仓库的复现工件位于 `workspace/exports/windows_acceptance_phase7.schem` 和 `workspace/previews/windows_acceptance_phase7/`。
 
+## GEN-3 Façade & Openings v1 示例验收
+
+生成三组有版本记录的立面工程、Sponge v3 投影与四视图预览。每次运行使用新的目录；先确认 Mine2Blend 和 Blender 路径可用：
+
+```powershell
+\.venv\Scripts\python.exe -m examples.gen3_facade_examples `
+  --output-root workspace `
+  --mine2blend-root "E:\MCbuild\Mine2Blend\mcblock_mine2blend" `
+  --blender "D:\SteamLibrary\steamapps\common\Blender\blender.exe"
+```
+
+命令输出会给出新目录下每个 `.jap.json`、`.schem` 和 `top.png`、`front.png`、`side.png`、`perspective.png` 的位置。`--build-only` 只生成工程与投影。若运行目录已存在，程序拒绝覆盖。
+
+本次 GEN-3 示例使用三种 façade 创作预设和三种 GEN-2 屋顶组合，包含三开间与五开间。主入口由 `opening_id`/`primary_entry` 指定；5 开间样例将主入口置于中间开间，门窗偏移不改变 `front` 锚点名称。园林示例记录了一个工程级窗宽/格栅覆盖，注册的预设文件保持不变。
+
+实际输出、Schematic 回读摘要、Mine2Blend/Blender 版本和人工视图审核记录见 [`gen3-facade-validation-report.md`](gen3-facade-validation-report.md)。Minecraft 1.21.5/WorldEdit 放置必须独立执行下文的安全世界检查；此项未经操作时保持 `pending`。
+
 ## Minecraft 1.21.5 与 WorldEdit 实机验收
 
 **状态：待实机验证。** 本任务没有启动 Minecraft/WorldEdit，也没有声称 Schematic 已通过游戏内验收。WorldEdit 官方命令文档说明可用 `//schem load` 载入剪贴板、`//paste -a` 跳过空气方块；独立安装的配置路径通常为 `config/worldedit/schematics`，服务端则通常为 `plugins/WorldEdit/schematics`。以实际安装平台的配置为准。[WorldEdit 命令](https://worldedit.enginehub.org/en/latest/commands/)、[WorldEdit Clipboard 与 Schematic](https://worldedit.enginehub.org/en/latest/usage/clipboard/)
