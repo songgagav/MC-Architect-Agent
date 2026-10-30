@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import importlib
 
 import pytest
 
 from jiangnan_agent.core.block import BlockState
 from jiangnan_agent.core.transforms import rotate_model_y
+from jiangnan_agent.generators.hall import CorridorParameters, HallParameters, generate_corridor, generate_hall
 from jiangnan_agent.generators.roof_profiles import (
     EaveProfile,
     MaterialPalette,
@@ -13,6 +15,7 @@ from jiangnan_agent.generators.roof_profiles import (
     RoofProfile,
     SurfaceBand,
 )
+from jiangnan_agent.io.schematic import read_schematic, write_schematic
 
 
 def _builder(name: str):
@@ -212,3 +215,132 @@ def test_components_reject_a_missing_palette_role() -> None:
 def test_material_palette_rejects_air_that_would_remove_roof_cells() -> None:
     with pytest.raises(ValueError, match="air cannot be used as a roof material"):
         MaterialPalette({"roof_stair": "minecraft:air"})
+
+
+def _canonical_hash(model) -> str:
+    records = "".join(
+        f"{x},{y},{z}:{state.to_string()}\n"
+        for (x, y, z), state in sorted(model.blocks.items())
+    )
+    return hashlib.sha256(records.encode("utf-8")).hexdigest()
+
+
+def _legacy_roof_profiles(ridge_height: int):
+    return {
+        "roof_profile": RoofProfile(ridge_height=ridge_height),
+        "eave_profile": EaveProfile(
+            side_overhang=1,
+            gable_end_treatment="overhanging_gable",
+            gable_end_projection=1,
+            thickness=1,
+            layer_roles=("eaves",),
+        ),
+        "ridge_profile": RidgeProfile(),
+        "material_palette": MaterialPalette(
+            {
+                "roof_stair": "minecraft:polished_deepslate_stairs",
+                "eaves": "minecraft:deepslate_tile_slab[type=bottom,waterlogged=false]",
+            }
+        ),
+    }
+
+
+def _bounds_tuple(model) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+    bounds = model.bounds
+    return (
+        (bounds.min_x, bounds.min_y, bounds.min_z),
+        (bounds.max_x, bounds.max_y, bounds.max_z),
+    )
+
+
+def test_default_hall_and_corridor_match_literal_legacy_hashes() -> None:
+    hall = generate_hall()
+    corridor = generate_corridor()
+
+    assert len(hall.blocks) == 522
+    assert _bounds_tuple(hall) == ((-1, 0, -1), (17, 10, 8))
+    assert _canonical_hash(hall) == "af86496dad80003d609d31a98e24a50957da419d32ca39a9ca622e8e61bc41b3"
+    assert len(corridor.blocks) == 150
+    assert _bounds_tuple(corridor) == ((-1, 0, -1), (12, 7, 4))
+    assert _canonical_hash(corridor) == "6b99402a56bb31b35e6209d64a8ac4f4f83b3b452171ea53a39bd6b1aef0d707"
+    assert (HallParameters().roof_rise, HallParameters().eaves) == (3, 1)
+    assert (CorridorParameters().roof_rise, CorridorParameters().eaves) == (1, 1)
+
+
+def test_explicit_default_profiles_match_the_legacy_hall_and_corridor_hashes() -> None:
+    hall = generate_hall(HallParameters(**_legacy_roof_profiles(3)))
+    corridor = generate_corridor(CorridorParameters(**_legacy_roof_profiles(1)))
+
+    assert _canonical_hash(hall) == "af86496dad80003d609d31a98e24a50957da419d32ca39a9ca622e8e61bc41b3"
+    assert _canonical_hash(corridor) == "6b99402a56bb31b35e6209d64a8ac4f4f83b3b452171ea53a39bd6b1aef0d707"
+
+
+@pytest.mark.parametrize("bay_count,expected_width", [(3, 18), (5, 28)])
+def test_profiled_hall_supports_three_and_five_bays(bay_count: int, expected_width: int) -> None:
+    model = generate_hall(HallParameters(bay_count=bay_count, **_legacy_roof_profiles(3)))
+
+    assert model.bounds.size[0] == expected_width
+    assert _canonical_hash(model) == _canonical_hash(
+        generate_hall(HallParameters(bay_count=bay_count, **_legacy_roof_profiles(3)))
+    )
+
+
+@pytest.mark.parametrize("length", [7, 17])
+def test_profiled_corridor_supports_different_lengths(length: int) -> None:
+    model = generate_corridor(CorridorParameters(length=length, **_legacy_roof_profiles(1)))
+
+    assert model.bounds.size == (length + 2, 7, 5)
+    assert _canonical_hash(model) == _canonical_hash(
+        generate_corridor(CorridorParameters(length=length, **_legacy_roof_profiles(1)))
+    )
+
+
+def test_increasing_hall_column_height_moves_the_profiled_roof_up_one_block() -> None:
+    profiles = _legacy_roof_profiles(3)
+    short = generate_hall(HallParameters(column_height=4, **profiles))
+    tall = generate_hall(HallParameters(column_height=5, **profiles))
+
+    assert short.block_at((1, 7, 1)).block_id.endswith("_stairs")
+    assert tall.block_at((1, 8, 1)) == short.block_at((1, 7, 1))
+
+
+def test_invalid_explicit_roof_profile_does_not_fall_back_to_legacy_roof() -> None:
+    with pytest.raises(ValueError, match="step|height|rise"):
+        generate_hall(HallParameters(roof_profile=RoofProfile(ridge_height=4)))
+
+
+def test_equal_legacy_roof_values_are_accepted_but_conflicts_are_explicit() -> None:
+    profiles = _legacy_roof_profiles(3)
+    HallParameters(roof_rise=3, eaves=1, **profiles)
+
+    with pytest.raises(ValueError, match="roof_rise conflicts"):
+        HallParameters(roof_rise=2, roof_profile=RoofProfile(ridge_height=3))
+    with pytest.raises(ValueError, match="eaves conflicts"):
+        HallParameters(eaves=0, eave_profile=profiles["eave_profile"])
+
+
+@pytest.mark.parametrize(
+    "building_type,ridge_height",
+    [
+        ("hall", 3),
+        ("corridor", 1),
+    ],
+)
+def test_profiled_buildings_roundtrip_sponge_v3(
+    building_type: str,
+    ridge_height: int,
+    tmp_path,
+) -> None:
+    if building_type == "hall":
+        model = generate_hall(HallParameters(**_legacy_roof_profiles(ridge_height)))
+    else:
+        model = generate_corridor(CorridorParameters(**_legacy_roof_profiles(ridge_height)))
+    path = tmp_path / "profiled-building.schem"
+
+    write_schematic(model, path, data_version=4325)
+    loaded = read_schematic(path)
+    expected_local = model.translated(-model.bounds.min_x, -model.bounds.min_y, -model.bounds.min_z)
+
+    assert loaded.data_version == 4325
+    assert loaded.offset == (model.bounds.min_x, model.bounds.min_y, model.bounds.min_z)
+    assert loaded.model.blocks == expected_local.blocks

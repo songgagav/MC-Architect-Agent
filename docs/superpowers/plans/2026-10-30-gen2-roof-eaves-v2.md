@@ -82,12 +82,12 @@
 - `generate_hall(parameters=None)` and `generate_corridor(parameters=None)` keep their public signatures and combine the independent component models.
 - Default profiles reproduce the legacy construction exactly; explicit profiles never trigger fallback to the legacy shape when validation fails.
 
-- [ ] **Step 1: Write failing integration tests** for the literal baseline count/bounds/hash: hall `522`, `min=(-1,0,-1)`, `max-exclusive=(17,10,8)`, SHA-256 `af86496dad80003d609d31a98e24a50957da419d32ca39a9ca622e8e61bc41b3`; corridor `150`, `min=(-1,0,-1)`, `max-exclusive=(12,7,4)`, SHA-256 `6b99402a56bb31b35e6209d64a8ac4f4f83b3b452171ea53a39bd6b1aef0d707`. Compute each hash from UTF-8 lines `x,y,z:<BlockState>\n` sorted by `(x,y,z)`.
-- [ ] **Step 2: Add failing generation tests** for an explicitly supplied default profile (same literal legacy hash), 3-bay and 5-bay halls, corridor lengths 7 and 17, roof-base movement when column height changes, explicit invalid-profile errors without legacy fallback, and Schematic v3 write/read equality for a profile-driven hall and corridor.
-- [ ] **Step 3: Run the focused hall and roof tests** and verify the compatibility assertions fail only because profiles are not integrated yet.
-- [ ] **Step 4: Integrate roof/eave/ridge builders** in `hall.py`; keep omitted legacy parameters distinguishable until conflicts are checked, then apply the current effective defaults.
-- [ ] **Step 5: Run `pytest tests/test_hall.py tests/test_roof_profiles.py tests/test_roof_eaves_v2.py -q`** and confirm default hashes and new generation tests pass.
-- [ ] **Step 6: Commit** as `feat: integrate roof profiles into hall and corridor`.
+- [x] **Step 1: Write failing integration tests** for the literal baseline count/bounds/hash: hall `522`, `min=(-1,0,-1)`, `max-exclusive=(17,10,8)`, SHA-256 `af86496dad80003d609d31a98e24a50957da419d32ca39a9ca622e8e61bc41b3`; corridor `150`, `min=(-1,0,-1)`, `max-exclusive=(12,7,4)`, SHA-256 `6b99402a56bb31b35e6209d64a8ac4f4f83b3b452171ea53a39bd6b1aef0d707`. Compute each hash from UTF-8 lines `x,y,z:<BlockState>\n` sorted by `(x,y,z)`. Baseline values passed before integration.
+- [x] **Step 2: Add failing generation tests** for an explicitly supplied default profile (same literal legacy hash), 3-bay and 5-bay halls, corridor lengths 7 and 17, roof-base movement when column height changes, explicit invalid-profile errors without legacy fallback, and Schematic v3 write/read equality for a profile-driven hall and corridor. Initial RED: all 9 profile-integration cases failed because parameter objects had no profile fields.
+- [x] **Step 3: Run the focused hall and roof tests** and verify the compatibility assertions fail only because profiles are not integrated yet.
+- [x] **Step 4: Integrate roof/eave/ridge builders** in `hall.py`; use an internal unspecified sentinel to tell omitted legacy values from explicitly supplied values, then normalize to the existing effective defaults after checking profile conflicts.
+- [x] **Step 5: Run `pytest tests/test_hall.py tests/test_roof_profiles.py tests/test_roof_eaves_v2.py -q`** and confirm default hashes and new generation tests pass: 53 passed.
+- [x] **Step 6: Commit** as `feat: integrate roof profiles into hall and corridor`.
 
 ### Task 4: Versioned parameters, assets, knowledge provenance, and presets
 

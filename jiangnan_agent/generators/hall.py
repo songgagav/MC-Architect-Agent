@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
 from types import MappingProxyType
 
 from ..core.block import BlockState
@@ -13,12 +14,12 @@ from .components import (
     generate_beam,
     generate_column,
     generate_door,
-    generate_eaves,
-    generate_gable_roof,
     generate_plinth,
+    generate_roof_components,
     generate_wall,
     generate_window,
 )
+from .roof_profiles import EaveProfile, MaterialPalette, RidgeProfile, RoofProfile
 
 DEFAULT_HALL_MATERIALS: dict[str, str] = {
     "plinth": "minecraft:smooth_stone",
@@ -39,6 +40,13 @@ DEFAULT_CORRIDOR_MATERIALS: dict[str, str] = {
     "roof": DEFAULT_HALL_MATERIALS["roof"],
     "eaves": DEFAULT_HALL_MATERIALS["eaves"],
 }
+
+
+class _Unspecified(Enum):
+    VALUE = "unspecified"
+
+
+_UNSPECIFIED = _Unspecified.VALUE
 
 
 def _require_integer(value: int, name: str, minimum: int | None = None) -> int:
@@ -87,6 +95,40 @@ def _merge(destination: VoxelModel, source: VoxelModel) -> None:
         destination.set_block(position, state)
 
 
+def _roof_model(
+    width: int,
+    depth: int,
+    base_y: int,
+    parameters: HallParameters | CorridorParameters,
+    materials: Mapping[str, BlockState],
+) -> VoxelModel:
+    roof_profile = parameters.roof_profile or RoofProfile(ridge_height=parameters.roof_rise)
+    eave_profile = parameters.eave_profile or EaveProfile(
+        side_overhang=parameters.eaves,
+        gable_end_treatment="overhanging_gable" if parameters.eaves else "hard_gable",
+        gable_end_projection=parameters.eaves,
+        thickness=1,
+        layer_roles=("eaves",),
+    )
+    ridge_profile = parameters.ridge_profile or RidgeProfile()
+    palette_roles = {
+        "roof_stair": materials["roof"].to_string(),
+        "eaves": materials["eaves"].to_string(),
+    }
+    if parameters.material_palette is not None:
+        palette_roles.update(parameters.material_palette.roles)
+    palette = MaterialPalette(palette_roles)
+    return generate_roof_components(
+        width,
+        depth,
+        base_y,
+        roof_profile,
+        eave_profile,
+        ridge_profile,
+        palette,
+    ).combined
+
+
 @dataclass(frozen=True)
 class HallParameters:
     """Dimensions and materials for a front-facing, odd-bay hall."""
@@ -96,10 +138,16 @@ class HallParameters:
     depth: int = 7
     column_height: int = 4
     plinth_height: int = 1
-    roof_rise: int = 3
-    eaves: int = 1
+    roof_rise: int | _Unspecified = _UNSPECIFIED
+    eaves: int | _Unspecified = _UNSPECIFIED
     door_width: int = 2
     materials: Mapping[str, str] | None = None
+    roof_profile: RoofProfile | None = None
+    eave_profile: EaveProfile | None = None
+    ridge_profile: RidgeProfile | None = None
+    material_palette: MaterialPalette | None = None
+    _roof_rise_explicit: bool = field(default=False, init=False, repr=False, compare=False)
+    _eaves_explicit: bool = field(default=False, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         bay_count = _require_integer(self.bay_count, "bay_count", 3)
@@ -107,8 +155,10 @@ class HallParameters:
         depth = _require_integer(self.depth, "depth", 5)
         column_height = _require_integer(self.column_height, "column_height", 3)
         plinth_height = _require_integer(self.plinth_height, "plinth_height", 1)
-        roof_rise = _require_integer(self.roof_rise, "roof_rise", 1)
-        eaves = _require_integer(self.eaves, "eaves", 0)
+        roof_rise_explicit = self.roof_rise is not _UNSPECIFIED
+        eaves_explicit = self.eaves is not _UNSPECIFIED
+        roof_rise = 3 if not roof_rise_explicit else _require_integer(self.roof_rise, "roof_rise", 1)
+        eaves = 1 if not eaves_explicit else _require_integer(self.eaves, "eaves", 0)
         door_width = _require_integer(self.door_width, "door_width", 1)
         if bay_count % 2 == 0:
             raise ValueError("bay_count must be an odd number of at least 3")
@@ -118,9 +168,25 @@ class HallParameters:
             raise ValueError("door_width must be 1 or 2 blocks")
         if bay_width < door_width + 2:
             raise ValueError("bay_width must leave a wall block on each side of the door")
-        if roof_rise > (depth - 1) // 2:
+        if self.roof_profile is None and roof_rise > (depth - 1) // 2:
             raise ValueError("roof_rise cannot exceed half the hall depth")
-        object.__setattr__(self, "materials", _checked_materials(self.materials, DEFAULT_HALL_MATERIALS))
+        _validate_profile_inputs(
+            roof_rise,
+            eaves,
+            roof_rise_explicit,
+            eaves_explicit,
+            self.roof_profile,
+            self.eave_profile,
+            self.ridge_profile,
+            self.material_palette,
+        )
+        normalized_materials = _checked_materials(self.materials, DEFAULT_HALL_MATERIALS)
+        _validate_palette_aliases(normalized_materials, self.material_palette)
+        object.__setattr__(self, "roof_rise", roof_rise)
+        object.__setattr__(self, "eaves", eaves)
+        object.__setattr__(self, "materials", normalized_materials)
+        object.__setattr__(self, "_roof_rise_explicit", roof_rise_explicit)
+        object.__setattr__(self, "_eaves_explicit", eaves_explicit)
 
 
 @dataclass(frozen=True)
@@ -131,22 +197,84 @@ class CorridorParameters:
     width: int = 3
     column_spacing: int = 3
     column_height: int = 3
-    roof_rise: int = 1
-    eaves: int = 1
+    roof_rise: int | _Unspecified = _UNSPECIFIED
+    eaves: int | _Unspecified = _UNSPECIFIED
     materials: Mapping[str, str] | None = None
+    roof_profile: RoofProfile | None = None
+    eave_profile: EaveProfile | None = None
+    ridge_profile: RidgeProfile | None = None
+    material_palette: MaterialPalette | None = None
+    _roof_rise_explicit: bool = field(default=False, init=False, repr=False, compare=False)
+    _eaves_explicit: bool = field(default=False, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         length = _require_integer(self.length, "length", 3)
         width = _require_integer(self.width, "width", 3)
         _require_integer(self.column_spacing, "column_spacing", 1)
         _require_integer(self.column_height, "column_height", 2)
-        roof_rise = _require_integer(self.roof_rise, "roof_rise", 1)
-        _require_integer(self.eaves, "eaves", 0)
+        roof_rise_explicit = self.roof_rise is not _UNSPECIFIED
+        eaves_explicit = self.eaves is not _UNSPECIFIED
+        roof_rise = 1 if not roof_rise_explicit else _require_integer(self.roof_rise, "roof_rise", 1)
+        eaves = 1 if not eaves_explicit else _require_integer(self.eaves, "eaves", 0)
         if width % 2 == 0:
             raise ValueError("corridor width must be odd for a centered roof ridge")
-        if roof_rise > (width - 1) // 2:
+        if self.roof_profile is None and roof_rise > (width - 1) // 2:
             raise ValueError("roof_rise cannot exceed half the corridor width")
-        object.__setattr__(self, "materials", _checked_materials(self.materials, DEFAULT_CORRIDOR_MATERIALS))
+        _validate_profile_inputs(
+            roof_rise,
+            eaves,
+            roof_rise_explicit,
+            eaves_explicit,
+            self.roof_profile,
+            self.eave_profile,
+            self.ridge_profile,
+            self.material_palette,
+        )
+        normalized_materials = _checked_materials(self.materials, DEFAULT_CORRIDOR_MATERIALS)
+        _validate_palette_aliases(normalized_materials, self.material_palette)
+        object.__setattr__(self, "roof_rise", roof_rise)
+        object.__setattr__(self, "eaves", eaves)
+        object.__setattr__(self, "materials", normalized_materials)
+        object.__setattr__(self, "_roof_rise_explicit", roof_rise_explicit)
+        object.__setattr__(self, "_eaves_explicit", eaves_explicit)
+
+
+def _validate_profile_inputs(
+    roof_rise: int,
+    eaves: int,
+    roof_rise_explicit: bool,
+    eaves_explicit: bool,
+    roof_profile: RoofProfile | None,
+    eave_profile: EaveProfile | None,
+    ridge_profile: RidgeProfile | None,
+    material_palette: MaterialPalette | None,
+) -> None:
+    for value, expected, name in (
+        (roof_profile, RoofProfile, "roof_profile"),
+        (eave_profile, EaveProfile, "eave_profile"),
+        (ridge_profile, RidgeProfile, "ridge_profile"),
+        (material_palette, MaterialPalette, "material_palette"),
+    ):
+        if value is not None and not isinstance(value, expected):
+            raise ValueError(f"{name} must be {expected.__name__}")
+    if roof_profile is not None and roof_rise_explicit and roof_profile.ridge_height != roof_rise:
+        raise ValueError("roof_rise conflicts with roof_profile.ridge_height")
+    if eave_profile is not None and eaves_explicit:
+        if eave_profile.side_overhang != eaves or eave_profile.gable_end_projection != eaves:
+            raise ValueError("eaves conflicts with eave_profile overhang values")
+
+
+def _validate_palette_aliases(
+    materials: Mapping[str, str] | None,
+    material_palette: MaterialPalette | None,
+) -> None:
+    if materials is None or material_palette is None:
+        return
+    for legacy_role, palette_role in (("roof", "roof_stair"), ("eaves", "eaves")):
+        legacy = materials.get(legacy_role)
+        explicit = material_palette.roles.get(palette_role)
+        if legacy is not None and explicit is not None and BlockState.parse(legacy) != BlockState.parse(explicit):
+            raise ValueError(f"materials.{legacy_role} conflicts with material_palette.{palette_role}")
 
 
 def generate_hall(parameters: HallParameters | None = None) -> VoxelModel:
@@ -240,10 +368,8 @@ def generate_hall(parameters: HallParameters | None = None) -> VoxelModel:
 
     _merge(
         model,
-        generate_gable_roof(width, depth, roof_base_y, parameters.roof_rise, parameters.eaves, materials["roof"]),
+        _roof_model(width, depth, roof_base_y, parameters, materials),
     )
-    for z in (0, front_z):
-        _merge(model, generate_eaves((0, roof_base_y, z), (width - 1, roof_base_y, z), materials["eaves"], parameters.eaves))
     return model
 
 
@@ -273,8 +399,6 @@ def generate_corridor(parameters: CorridorParameters | None = None) -> VoxelMode
     roof_base_y = beam_y + 1
     _merge(
         model,
-        generate_gable_roof(parameters.length, parameters.width, roof_base_y, parameters.roof_rise, parameters.eaves, materials["roof"]),
+        _roof_model(parameters.length, parameters.width, roof_base_y, parameters, materials),
     )
-    for z in post_z_positions:
-        _merge(model, generate_eaves((0, roof_base_y, z), (parameters.length - 1, roof_base_y, z), materials["eaves"], parameters.eaves))
     return model
