@@ -103,6 +103,55 @@ def test_parameter_resolution_rejects_unregistered_target_block_states() -> None
         )
 
 
+@pytest.mark.parametrize(
+    ("asset_version", "schema_version", "role", "state"),
+    (
+        (1, 1, "roof", "minecraft:unregistered_stairs"),
+        (1, 1, "eaves", "minecraft:unregistered_slab"),
+        (3, 2, "roof", "minecraft:unregistered_stairs"),
+        (3, 2, "eaves", "minecraft:unregistered_slab"),
+    ),
+)
+def test_legacy_parameter_resolution_rejects_unregistered_roof_materials(
+    asset_version: int,
+    schema_version: int,
+    role: str,
+    state: str,
+) -> None:
+    with pytest.raises(ValueError, match="Minecraft Java 1.21.5"):
+        resolve_parameters(
+            "jiangnan.hall",
+            {"materials": {role: state}},
+            asset_version=asset_version,
+            schema_version=schema_version,
+        )
+
+
+def test_parameter_resolution_rejects_non_solid_ridge_cap_materials() -> None:
+    with pytest.raises(ValueError, match="ridge cap material must be a full block"):
+        resolve_parameters(
+            "jiangnan.hall",
+            {
+                "ridge_profile": {"cap_width": 1, "cap_height": 1},
+                "material_palette": {"ridge": "minecraft:glass_pane"},
+            },
+        )
+
+
+def test_parameter_resolution_reports_a_missing_ridge_cap_palette_role() -> None:
+    with pytest.raises(ValueError, match="missing material palette role 'custom_ridge'"):
+        resolve_parameters(
+            "jiangnan.hall",
+            {
+                "ridge_profile": {
+                    "cap_width": 1,
+                    "cap_height": 1,
+                    "material_role": "custom_ridge",
+                }
+            },
+        )
+
+
 def test_three_versioned_roof_presets_are_available_as_typed_values() -> None:
     list_roof_presets = getattr(parameter_registry, "list_roof_presets")
     load_roof_preset = getattr(parameter_registry, "load_roof_preset")

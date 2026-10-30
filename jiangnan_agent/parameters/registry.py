@@ -14,7 +14,7 @@ from typing import Any
 from ..assets.registry import get_asset
 from ..core.block import BlockState
 from ..generators.hall import CorridorParameters, HallParameters
-from ..generators.minecraft_materials import validate_roof_material_state
+from ..generators.minecraft_materials import roof_material_shape, validate_roof_material_state
 from ..generators.roof_profiles import (
     EaveProfile,
     MaterialPalette,
@@ -709,6 +709,27 @@ def _resolve_generator_parameters(schema: ParameterSchema, config: Mapping[str, 
                 raise ValueError(f"invalid material_palette role {role!r}: {exc}") from exc
     generator_type = HallParameters if schema.kind == "hall" else CorridorParameters
     generator_parameters = generator_type(**generator_values)
+    if schema.version < 3:
+        legacy_materials = generator_values.get("materials")
+        if isinstance(legacy_materials, Mapping):
+            for role in ("roof", "eaves"):
+                state_string = legacy_materials.get(role)
+                if isinstance(state_string, str):
+                    try:
+                        validate_roof_material_state(BlockState.parse(state_string))
+                    except ValueError as exc:
+                        raise ValueError(f"invalid legacy materials.{role}: {exc}") from exc
+    else:
+        ridge_profile = generator_values["ridge_profile"]
+        material_palette = generator_values["material_palette"]
+        assert isinstance(ridge_profile, RidgeProfile)
+        assert isinstance(material_palette, MaterialPalette)
+        if ridge_profile.cap_height > 0:
+            if ridge_profile.material_role not in material_palette.roles:
+                raise ValueError(f"missing material palette role {ridge_profile.material_role!r}")
+            cap_state = BlockState.parse(material_palette.roles[ridge_profile.material_role])
+            if roof_material_shape(cap_state) != "full":
+                raise ValueError("ridge cap material must be a full block")
     adapter_options = {
         option_name: _read_path(config, input_path)
         for input_path, option_name in schema.adapter_fields.items()

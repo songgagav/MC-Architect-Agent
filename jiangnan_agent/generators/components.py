@@ -487,6 +487,8 @@ def generate_ridge_cap(
     owned: set[Position] = set()
     if ridge_profile.cap_height > 0:
         cap_state = _material(palette.roles[ridge_profile.material_role])
+        if roof_material_shape(cap_state) != "full":
+            raise ValueError("ridge cap material must be a full block")
         for layer in range(ridge_profile.cap_height):
             y = base_y + roof_profile.ridge_height + layer
             for z in range(z_start, z_start + ridge_profile.cap_width):

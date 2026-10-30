@@ -36,7 +36,7 @@
 
 预设参数来源登记为 `minecraft_adaptation` / Minecraft 创作配置，不关联未经核验的历史测绘来源。预设可在 schema 几何边界内覆盖断面、尺寸和材料；生成器仍负责校验各方块的合法状态与方向。`jiangnan_dark_tile` 升高 3，适用半跨至少 3 格；`gray_brick_layered` 升高 2，适用半跨至少 2 格；`warm_spruce_garden` 升高 1，适用半跨至少 1 格，可用于默认宽度回廊。默认 corridor 的半跨为 1，前两个预设必须降低升高量后才能用于该断面；无法满足的配置要报错。默认 hall/corridor 的 legacy `eaves=1` 等效于横向与山墙端各外挑 1 格，故默认端部效果是外挑型；新显式 profile 未指定时，不自动套用表中的任一创作预设，以保留当前输出。
 
-`surface_bands` 按从檐口到屋脊的 `[start,end)` 千分比区间映射 `stair`、`slab`、`full_block` 形状及对应 palette 角色；区间连续无缝，最后一带包含屋脊端点 1000，即最后一带采用 `[start,1000]`。楼梯统一由生成器写入正确 facing、bottom half、straight shape、`waterlogged=false`；屋面半砖使用 top half 以对齐完整屋面高度，檐口半砖则沿用 palette 给出的明确状态；整块不附加方向属性。生成前使用项目维护的 Minecraft Java 1.21.5 建筑材质子集校验所有 Palette 方块 ID 和已登记属性；此子集不是游戏完整方块注册表，未知 ID、命名空间或状态属性会明确拒绝。`full_block` 只接受登记为整块的材质或 `type=double` 的半砖。相邻坡面高度变化一级且包含整块或半砖表面时，补入连接方块；半砖过渡使用双层半砖，避免只在棱角接触的空隙。默认值为全区间楼梯面、现有半砖檐口、关闭独立盖脊，确保旧输出不变。檐口装饰放在檐口基准线上方一格，不占用支撑墙体或梁端；屋脊装饰使用屋脊 Profile 定义的位置。
+`surface_bands` 按从檐口到屋脊的 `[start,end)` 千分比区间映射 `stair`、`slab`、`full_block` 形状及对应 palette 角色；区间连续无缝，最后一带包含屋脊端点 1000，即最后一带采用 `[start,1000]`。楼梯统一由生成器写入正确 facing、bottom half、straight shape、`waterlogged=false`；屋面半砖使用 top half 以对齐完整屋面高度，檐口半砖则沿用 palette 给出的明确状态；整块不附加方向属性。参数解析和生成均使用项目维护的 Minecraft Java 1.21.5 建筑材质子集校验方块 ID 和已登记属性，旧 schema 的 `materials.roof/eaves` 也在解析时校验；此子集不是游戏完整方块注册表，未知 ID、命名空间或状态属性会明确拒绝。`full_block` 只接受登记为整块的材质或 `type=double` 的半砖；盖脊主体使用整块材质或双层半砖。相邻坡面高度变化一级且包含整块或半砖表面时，补入连接方块；半砖过渡使用双层半砖，避免只在棱角接触的空隙。默认值为全区间楼梯面、现有半砖檐口、关闭独立盖脊，确保旧输出不变。檐口装饰放在檐口基准线上方一格，不占用支撑墙体或梁端；屋脊装饰使用屋脊 Profile 定义的位置。
 
 ## 兼容性与硬约束
 

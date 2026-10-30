@@ -318,6 +318,28 @@ def test_ridge_cap_uses_its_width_and_stacks_above_the_apex() -> None:
     assert ridge.block_at((1, 13, 2)) == BlockState.parse("minecraft:polished_deepslate")
 
 
+def test_ridge_cap_rejects_a_non_solid_surface_material() -> None:
+    generate = _builder("generate_ridge_cap")
+    roles = dict(_palette().roles)
+    roles["ridge"] = "minecraft:glass_pane"
+    with pytest.raises(ValueError, match="ridge cap material must be a full block"):
+        generate(
+            3,
+            5,
+            10,
+            RoofProfile(ridge_height=2),
+            EaveProfile(
+                side_overhang=0,
+                gable_end_treatment="hard_gable",
+                gable_end_projection=0,
+                thickness=0,
+                layer_roles=(),
+            ),
+            RidgeProfile(cap_width=1, cap_height=1),
+            MaterialPalette(roles),
+        )
+
+
 def test_components_have_explicit_boundary_ownership_without_other_overlaps() -> None:
     generate = _builder("generate_roof_components")
     parts = generate(
