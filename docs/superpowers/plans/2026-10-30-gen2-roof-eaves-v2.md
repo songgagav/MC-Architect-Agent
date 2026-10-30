@@ -42,11 +42,11 @@
 - `RoofProfile.ridge_height` is the rise above the roof spring datum; section points are integer permille pairs with endpoints `(0, 0)` and `(1000, 1000)`.
 - `SurfaceBand` carries `start`, `end`, `form` (`stair`, `slab`, `full_block`), and `material_role`; intervals are contiguous and the final band includes 1000.
 
-- [ ] **Step 1: Write failing tests** for the literal default sample `(0, 1, 2, 3)` at half-run 3/rise 3; the flattened sample `(0, 1, 1, 2)` at half-run 3/rise 2; equivalent samples at a different span; and invalid endpoints, unordered points, insufficient half-run, and height jumps above one.
-- [ ] **Step 2: Run `pytest tests/test_roof_profiles.py -q`** and confirm failures come from the missing profile API or validation behavior.
-- [ ] **Step 3: Implement the immutable profile models and exact-rational sampler** in `roof_profiles.py`; use `Fraction` for sample position and interpolation, round only the final block height with halves upward, and reject invalid expanded profiles instead of reshaping them.
-- [ ] **Step 4: Run `pytest tests/test_roof_profiles.py -q`** and confirm all profile cases pass.
-- [ ] **Step 5: Commit** the profile model and its tests as `feat: add typed roof profiles`.
+- [x] **Step 1: Write failing tests** for the literal default sample `(0, 1, 2, 3)` at half-run 3/rise 3; the flattened sample `(0, 1, 1, 2)` at half-run 3/rise 2; equivalent samples at a different span; and invalid endpoints, unordered points, insufficient half-run, and height jumps above one.
+- [x] **Step 2: Run `pytest tests/test_roof_profiles.py -q`** and confirm failures come from the missing profile API or validation behavior. First run exposed the missing module as fixture setup errors; moving the guard into the test call phase produced the intended RED: 12 failed because the API was absent.
+- [x] **Step 3: Implement the immutable profile models and exact-rational sampler** in `roof_profiles.py`; use `Fraction` for sample position and interpolation, round only the final block height with halves upward, and reject invalid expanded profiles instead of reshaping them.
+- [x] **Step 4: Run `pytest tests/test_roof_profiles.py -q`** and confirm all profile cases pass: 12 passed.
+- [x] **Step 5: Commit** the profile model and its tests as `feat: add typed roof profiles`.
 
 ### Task 2: Independent roof, eaves, and ridge builders
 
