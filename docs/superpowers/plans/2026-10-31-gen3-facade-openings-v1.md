@@ -138,7 +138,7 @@
 - [x] Run the focused tests and confirm the new API is missing or fails.
 - [x] Implement typed records, parsers/serializers, and explicit-value conflict handling.
 - [x] Run `pytest tests\test_facade_profiles.py tests\test_hall.py -q`; confirm all focused tests pass.
-- [ ] Commit the typed profile layer with its tests and design/plan documents: stage `tests/test_facade_profiles.py`, `tests/test_hall.py`, `jiangnan_agent/generators/facade_profiles.py`, `jiangnan_agent/generators/hall.py`, `docs/superpowers/specs/2026-10-30-gen3-facade-openings-v1-design.md`, and `docs/superpowers/plans/2026-10-31-gen3-facade-openings-v1.md`; commit as `feat: add typed façade profiles`.
+- [x] Commit the typed profile layer with its tests and design/plan documents: stage `tests/test_facade_profiles.py`, `tests/test_hall.py`, `jiangnan_agent/generators/facade_profiles.py`, `jiangnan_agent/generators/hall.py`, `docs/superpowers/specs/2026-10-30-gen3-facade-openings-v1-design.md`, and `docs/superpowers/plans/2026-10-31-gen3-facade-openings-v1.md`; commit as `feat: add typed façade profiles`.
 
 ### Task 2: Face coordinates, wall layers, ownership, and opening masks
 
@@ -150,20 +150,20 @@
 
 **Interfaces:**
 - Define local face basis with `front=+Z`, `rear=-Z`, `left=-X`, `right=+X`; X increases across front/rear, Y upward, Z from rear to front.
-- Define `resolve_facade_opening(opening, segment_bounds) -> BoundingBox` where segment bounds are supplied from the actual front/rear bay list or left/right side-post interval list.
+- Define `resolve_facade_opening(opening, segment_bounds, *, width, height) -> BoundingBox` where segment bounds are supplied from the actual front/rear bay list or left/right side-post interval list and dimensions come from the applicable door/window profile.
 - Extend `generate_wall(bounds, material, openings=(), *, profile=None, face=None)`; `profile=None` preserves the existing implementation and signature behavior.
 - Define `BlockOwnershipMap` to record claimed cells and allowed replacement roles; define a strict merge operation that raises on undeclared overlap and refuses writes into protected passage/opening cells.
 
-- [ ] **Write failing wall/ownership tests first**
+- [x] **Write failing wall/ownership tests first**
   - Test each face’s outward normal and positive local offset.
   - Test front/rear bay segments and left/right segments derived from side posts with differing counts.
   - Test thickness 1 legacy occupancy; test inward/outward thickness 2 bounds for all four faces.
   - Test identical opening mask through every layer and rejection of a decoration/frame placed in opening or passage cells.
   - Test wall can be replaced by door/window only in explicitly replaceable cells; test column/beam/roof ownership conflict raises.
-- [ ] Run the focused tests and confirm they fail.
-- [ ] Implement face mapping, profile-aware wall fill, opening mask, ownership tracking, and conflict errors.
-- [ ] Run `pytest tests\test_facade_geometry.py tests\test_components.py -q`; confirm pass.
-- [ ] Commit the wall geometry/ownership layer: `feat: add owned wall panel generation`.
+- [x] Run the focused tests and confirm they fail.
+- [x] Implement face mapping, profile-aware wall fill, opening mask, ownership tracking, and conflict errors.
+- [x] Run `pytest tests\test_facade_geometry.py tests\test_components.py -q`; confirm pass.
+- [x] Commit the wall geometry/ownership layer: `feat: add owned wall panel generation`.
 
 ### Task 3: Profiled doors, windows, grid detail, and state transforms
 

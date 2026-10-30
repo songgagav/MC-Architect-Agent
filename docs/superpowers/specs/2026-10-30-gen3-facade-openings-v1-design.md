@@ -58,7 +58,7 @@
 - 立面局部坐标统一为 X 沿正面从左至右增加、Y 向上、Z 从 rear 向 front 增加；front/rear/left/right 的朝外法线分别为 +Z/-Z/-X/+X。front/rear 按 X 向开间索引定位；left/right 按实际侧柱间段或局部 Z 坐标定位，不复用 `bay_count`。
 - hall 使用显式 `facade_profile` 控制门、窗、墙层和木构细节；旧 `door_width` 与旧材料配置仍可读。`FacadeOpening` 以稳定 ID、立面、开间/柱间段索引或局部坐标、段内偏移和门槛/窗台偏移定位；未给出布局时，显式 Profile 沿用当前中门与两侧正面窗的规则。主入口位置变化后，以该 opening 的实际位置重新计算现有 `front` 锚点坐标；锚点名称及模块连接接口保持不变。`through_passage` 仍从同一主入口派生既有 `rear` 锚点；首版不允许其他开口新增连接锚点，其他开口只能标记为 `non_connecting`。必要时以省略哨兵区分旧参数是否显式给出，冲突必须报错。
 - corridor 仅在显式 Profile 下生成指定围护面；`garden_open_gallery` 保持通透，默认无 Profile 时仍生成当前开敞廊架。
-- `WallPanelProfile` 明确厚度层从立面参考层沿 `inward` 或 `outward` 扩展；单层默认保持当前占格。验证扩厚后与柱梁、屋檐、门窗、Assembly 净空和连接区的关系。
+- `WallPanelProfile` 明确厚度层从立面参考层沿 `inward` 或 `outward` 扩展；单层默认保持当前占格。Profile 不授予整面墙的替换权；`BlockOwnershipMap` 只对逐格明确授权的墙块开放替换。验证扩厚后与柱梁、屋檐、门窗、Assembly 净空和连接区的关系。
 - 墙、门窗、柱梁和装饰之间使用方块所有权及开口保留掩码。门窗和装饰只能替换 Profile 明确声明可替换的墙体格；结构格、通行格和未声明占格冲突受保护或显式报错，不依靠生成顺序静默覆盖。木构 Profile 只补充外露柱梁、柱础/柱头、简单梁枋层次及墙木收边。
 - 新建 Profile 经过现有旋转/镜像流程时，仅允许已支持的方块状态；不支持的属性变换报错。
 

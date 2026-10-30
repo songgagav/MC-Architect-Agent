@@ -84,15 +84,12 @@ class WallPanelProfile:
     thickness: int = 1
     expand_direction: str = "inward"
     layer_roles: tuple[str, ...] = ("wall",)
-    replaceable: bool = True
 
     def __post_init__(self) -> None:
         thickness = _integer(self.thickness, "thickness", minimum=1)
         if self.expand_direction not in {"inward", "outward"}:
             raise ValueError("expand_direction must be inward or outward")
         roles = _role_sequence(self.layer_roles, "layer_roles", expected=thickness)
-        if not isinstance(self.replaceable, bool):
-            raise ValueError("replaceable must be a boolean")
         object.__setattr__(self, "thickness", thickness)
         object.__setattr__(self, "layer_roles", roles)
 
@@ -267,12 +264,11 @@ def wall_panel_profile_to_mapping(profile: WallPanelProfile) -> dict[str, object
         "thickness": profile.thickness,
         "expand_direction": profile.expand_direction,
         "layer_roles": list(profile.layer_roles),
-        "replaceable": profile.replaceable,
     }
 
 
 def wall_panel_profile_from_mapping(value: object) -> WallPanelProfile:
-    config = _profile_mapping(value, "wall", {"thickness", "expand_direction", "layer_roles", "replaceable"})
+    config = _profile_mapping(value, "wall", {"thickness", "expand_direction", "layer_roles"})
     return WallPanelProfile(**config)  # type: ignore[arg-type]
 
 

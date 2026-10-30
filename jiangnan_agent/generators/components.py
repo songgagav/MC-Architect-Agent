@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from fractions import Fraction
 
 from ..core.block import BlockState
 from ..core.geometry import BoundingBox, Position
 from ..core.scene import VoxelModel
+from .facade_geometry import BlockOwnershipMap, OpeningMask, wall_layer_bounds
+from .facade_profiles import WallPanelProfile
 from .roof_profiles import (
     EaveProfile,
     MaterialPalette,
@@ -103,14 +105,24 @@ def generate_beam(start: Position, end: Position, material: Material) -> VoxelMo
 
 def generate_wall(
     bounds: BoundingBox,
-    material: Material,
+    material: Material | Mapping[str, Material],
     openings: Iterable[BoundingBox] = (),
+    *,
+    profile: WallPanelProfile | None = None,
+    face: str | None = None,
+    material_roles: Mapping[str, Material] | None = None,
+    ownership: BlockOwnershipMap | None = None,
+    opening_mask: OpeningMask | None = None,
 ) -> VoxelModel:
-    """Fill a wall panel, leaving specified half-open rectangular openings."""
+    """Fill a wall panel, with optional layered, owned façade geometry.
+
+    With ``profile=None`` the legacy one-layer implementation and its positional
+    API remain unchanged. Profile mode treats ``bounds`` as the one-block-thick
+    reference face and grows further layers in the declared normal direction.
+    """
 
     if not isinstance(bounds, BoundingBox) or any(size <= 0 for size in bounds.size):
         raise ValueError("wall bounds must have positive width, height, and depth")
-    state = _material(material)
     opening_boxes = tuple(openings)
     for opening in opening_boxes:
         if not isinstance(opening, BoundingBox) or any(size <= 0 for size in opening.size):
@@ -122,13 +134,70 @@ def generate_wall(
         ):
             raise ValueError("wall openings must be within wall bounds")
 
+    if profile is None:
+        if material_roles is not None or ownership is not None or opening_mask is not None or face is not None:
+            raise ValueError("profile, face, material_roles, ownership, and opening_mask must be used together")
+        state = _material(material)  # type: ignore[arg-type]
+        model = VoxelModel()
+        for y in range(bounds.min_y, bounds.max_y):
+            for z in range(bounds.min_z, bounds.max_z):
+                for x in range(bounds.min_x, bounds.max_x):
+                    position = (x, y, z)
+                    if not any(opening.contains(position) for opening in opening_boxes):
+                        model.set_block(position, state)
+        return model
+
+    if not isinstance(profile, WallPanelProfile):
+        raise ValueError("profile must be a WallPanelProfile")
+    if face is None:
+        raise ValueError("face is required when a wall profile is supplied")
+    if ownership is not None and not isinstance(ownership, BlockOwnershipMap):
+        raise ValueError("ownership must be a BlockOwnershipMap")
+    if opening_mask is not None and not isinstance(opening_mask, OpeningMask):
+        raise ValueError("opening_mask must be an OpeningMask")
+    if ownership is not None and opening_mask is not None and ownership.opening_mask is not opening_mask:
+        raise ValueError("ownership and wall generation must share the same opening_mask")
+    opening_mask = opening_mask or (ownership.opening_mask if ownership is not None else None)
+
+    if isinstance(material, Mapping):
+        if material_roles is not None:
+            raise ValueError("provide role materials either positionally or as material_roles, not both")
+        role_sources = material
+    elif material_roles is None:
+        role_sources = {role: material for role in profile.layer_roles}
+    else:
+        role_sources = material_roles
+    missing_roles = set(profile.layer_roles) - set(role_sources)
+    if missing_roles:
+        raise ValueError(f"missing wall layer materials: {', '.join(sorted(missing_roles))}")
+    states = {role: _material(role_sources[role]) for role in set(profile.layer_roles)}
+    layers = wall_layer_bounds(
+        bounds,
+        face,
+        thickness=profile.thickness,
+        expand_direction=profile.expand_direction,
+    )
+
     model = VoxelModel()
-    for y in range(bounds.min_y, bounds.max_y):
-        for z in range(bounds.min_z, bounds.max_z):
-            for x in range(bounds.min_x, bounds.max_x):
-                position = (x, y, z)
-                if not any(opening.contains(position) for opening in opening_boxes):
+    for layer_index, layer_bounds in enumerate(layers):
+        delta = (
+            layer_bounds.min_x - bounds.min_x,
+            layer_bounds.min_y - bounds.min_y,
+            layer_bounds.min_z - bounds.min_z,
+        )
+        layer_openings = tuple(opening.translated(*delta) for opening in opening_boxes)
+        state = states[profile.layer_roles[layer_index]]
+        for y in range(layer_bounds.min_y, layer_bounds.max_y):
+            for z in range(layer_bounds.min_z, layer_bounds.max_z):
+                for x in range(layer_bounds.min_x, layer_bounds.max_x):
+                    position = (x, y, z)
+                    if any(opening.contains(position) for opening in layer_openings):
+                        continue
+                    if opening_mask is not None and opening_mask.contains(position):
+                        continue
                     model.set_block(position, state)
+    if ownership is not None:
+        ownership.merge(model, "wall")
     return model
 
 
