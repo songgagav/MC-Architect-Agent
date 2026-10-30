@@ -1,0 +1,30 @@
+{
+  "profile_id": "huizhou_mc_classic",
+  "version": 2,
+  "knowledge_base_version": 3,
+  "label": "徽州 Minecraft 古典创作预设",
+  "design_target_region_id": "huizhou_core",
+  "region_association_kind": "creative_target",
+  "classification": "minecraft_visual_style",
+  "parameter_schema": {"schema_id": "minecraft_building_design", "version": 1},
+  "status": "draft",
+  "grid_scale_meters_per_block": 1.0,
+  "reference_asset_ids": ["reference.liusufang-frame", "reference.fangtang"],
+  "reference_asset_versions": {"reference.fangtang": 1, "reference.liusufang-frame": 1},
+  "palette_selection": {
+    "strategy": "measured_frequency_candidates",
+    "source_asset_ids": ["reference.liusufang-frame", "reference.fangtang"],
+    "top_material_count": 12,
+    "semantic_roles": "unverified"
+  },
+  "visual_preferences": {
+    "silhouette": {"value": null, "status": "unverified", "note": "No semantic roof segmentation is currently registered."},
+    "ornament_density": {"value": null, "status": "user_editable", "note": "Set by the designer; not inferred from regional history."},
+    "roof_layers": {"value": null, "status": "unverified", "note": "Requires manual annotation or a future validated classifier."}
+  },
+  "provenance": {
+    "source_ids": ["user.scope.jiangnan-huizhou", "user.template.fangtang.2026", "user.template.liusufang.2026"],
+    "note": "User-requested Minecraft design target. The referenced projections have no verified Huizhou attribution and are not historical standards."
+  },
+  "notes": "Palette candidates come from imported reference statistics; the preset is freely overridable and does not alter generators."
+}

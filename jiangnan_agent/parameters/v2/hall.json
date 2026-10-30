@@ -1,0 +1,248 @@
+{
+  "schema_id": "hall",
+  "version": 2,
+  "asset_id": "jiangnan.hall",
+  "kind": "hall",
+  "defaults": {
+    "building_type": "hall",
+    "style": "unspecified",
+    "bay_count": 3,
+    "bay_spacing": 5,
+    "depth": 7,
+    "column_height": 4,
+    "plinth_height": 1,
+    "door_width": 2,
+    "roof_type": "gable",
+    "roof_section": {
+      "profile": "symmetric_gable",
+      "rise": 3
+    },
+    "eaves": 1,
+    "materials": {
+      "plinth": "minecraft:smooth_stone",
+      "floor": "minecraft:spruce_planks",
+      "column": "minecraft:stripped_spruce_log",
+      "beam": "minecraft:stripped_spruce_log",
+      "wall": "minecraft:calcite",
+      "door": "minecraft:spruce_door",
+      "window": "minecraft:white_stained_glass_pane",
+      "roof": "minecraft:polished_deepslate_stairs",
+      "eaves": "minecraft:deepslate_tile_slab[type=bottom,waterlogged=false]"
+    },
+    "interfaces": {
+      "through_passage": false
+    }
+  },
+  "independent_fields": [
+    "building_type",
+    "style",
+    "bay_count",
+    "bay_spacing",
+    "depth",
+    "column_height",
+    "plinth_height",
+    "door_width",
+    "roof_type",
+    "roof_section",
+    "eaves",
+    "materials",
+    "interfaces"
+  ],
+  "derived_fields": {
+    "plinth_width": "bay_count * bay_spacing + 1",
+    "plinth_depth": "depth",
+    "bounds_width": "plinth_width + 2 * eaves",
+    "bounds_depth": "plinth_depth + 2 * eaves"
+  },
+  "generator_fields": {
+    "bay_count": "bay_count",
+    "bay_spacing": "bay_width",
+    "depth": "depth",
+    "column_height": "column_height",
+    "plinth_height": "plinth_height",
+    "door_width": "door_width",
+    "roof_section.rise": "roof_rise",
+    "eaves": "eaves",
+    "materials": "materials"
+  },
+  "adapter_fields": {
+    "interfaces.through_passage": "through_passage"
+  },
+  "legacy_aliases": {
+    "bay_width": "bay_spacing",
+    "roof_rise": "roof_section.rise",
+    "through_passage": "interfaces.through_passage"
+  },
+  "hard_constraints": [
+    {
+      "id": "hall-parameter-validation",
+      "validator": "HallParameters",
+      "source_id": "generator.hall.v1"
+    }
+  ],
+  "soft_constraints": [
+    {
+      "rule_id": "hall-front-window-width",
+      "field": "bay_spacing",
+      "operator": "lt",
+      "value": 5
+    }
+  ],
+  "provenance_categories": [
+    "user_input",
+    "literature_reference",
+    "survey_data",
+    "derived",
+    "minecraft_adaptation"
+  ],
+  "field_provenance": {
+    "building_type": {
+      "default_category": "minecraft_adaptation",
+      "accepted_categories": [
+        "user_input",
+        "minecraft_adaptation"
+      ],
+      "source_ids": [
+        "generator.hall.v1"
+      ],
+      "note": "Current deterministic Minecraft generator/default configuration; not a historical measurement."
+    },
+    "style": {
+      "default_category": "minecraft_adaptation",
+      "accepted_categories": [
+        "user_input",
+        "minecraft_adaptation"
+      ],
+      "source_ids": [
+        "generator.hall.v1"
+      ],
+      "note": "Current deterministic Minecraft generator/default configuration; not a historical measurement."
+    },
+    "bay_count": {
+      "default_category": "minecraft_adaptation",
+      "accepted_categories": [
+        "user_input",
+        "minecraft_adaptation"
+      ],
+      "source_ids": [
+        "generator.hall.v1"
+      ],
+      "note": "Current deterministic Minecraft generator/default configuration; not a historical measurement."
+    },
+    "bay_spacing": {
+      "default_category": "minecraft_adaptation",
+      "accepted_categories": [
+        "user_input",
+        "minecraft_adaptation"
+      ],
+      "source_ids": [
+        "generator.hall.v1"
+      ],
+      "note": "Current deterministic Minecraft generator/default configuration; not a historical measurement."
+    },
+    "depth": {
+      "default_category": "minecraft_adaptation",
+      "accepted_categories": [
+        "user_input",
+        "minecraft_adaptation"
+      ],
+      "source_ids": [
+        "generator.hall.v1"
+      ],
+      "note": "Current deterministic Minecraft generator/default configuration; not a historical measurement."
+    },
+    "column_height": {
+      "default_category": "minecraft_adaptation",
+      "accepted_categories": [
+        "user_input",
+        "minecraft_adaptation"
+      ],
+      "source_ids": [
+        "generator.hall.v1"
+      ],
+      "note": "Current deterministic Minecraft generator/default configuration; not a historical measurement."
+    },
+    "plinth_height": {
+      "default_category": "minecraft_adaptation",
+      "accepted_categories": [
+        "user_input",
+        "minecraft_adaptation"
+      ],
+      "source_ids": [
+        "generator.hall.v1"
+      ],
+      "note": "Current deterministic Minecraft generator/default configuration; not a historical measurement."
+    },
+    "door_width": {
+      "default_category": "minecraft_adaptation",
+      "accepted_categories": [
+        "user_input",
+        "minecraft_adaptation"
+      ],
+      "source_ids": [
+        "generator.hall.v1"
+      ],
+      "note": "Current deterministic Minecraft generator/default configuration; not a historical measurement."
+    },
+    "roof_type": {
+      "default_category": "minecraft_adaptation",
+      "accepted_categories": [
+        "user_input",
+        "minecraft_adaptation"
+      ],
+      "source_ids": [
+        "generator.hall.v1"
+      ],
+      "note": "Current deterministic Minecraft generator/default configuration; not a historical measurement."
+    },
+    "roof_section": {
+      "default_category": "minecraft_adaptation",
+      "accepted_categories": [
+        "user_input",
+        "minecraft_adaptation"
+      ],
+      "source_ids": [
+        "generator.hall.v1"
+      ],
+      "note": "Current deterministic Minecraft generator/default configuration; not a historical measurement."
+    },
+    "eaves": {
+      "default_category": "minecraft_adaptation",
+      "accepted_categories": [
+        "user_input",
+        "minecraft_adaptation"
+      ],
+      "source_ids": [
+        "generator.hall.v1"
+      ],
+      "note": "Current deterministic Minecraft generator/default configuration; not a historical measurement."
+    },
+    "materials": {
+      "default_category": "minecraft_adaptation",
+      "accepted_categories": [
+        "user_input",
+        "minecraft_adaptation"
+      ],
+      "source_ids": [
+        "generator.hall.v1"
+      ],
+      "note": "Current deterministic Minecraft generator/default configuration; not a historical measurement."
+    },
+    "interfaces": {
+      "default_category": "minecraft_adaptation",
+      "accepted_categories": [
+        "user_input",
+        "minecraft_adaptation"
+      ],
+      "source_ids": [
+        "generator.hall.v1"
+      ],
+      "note": "Current deterministic Minecraft generator/default configuration; not a historical measurement."
+    }
+  },
+  "derived_provenance": {
+    "category": "derived",
+    "source_id": "resolver.parameters.v2",
+    "note": "Calculated deterministically by the versioned parameter resolver."
+  }
+}

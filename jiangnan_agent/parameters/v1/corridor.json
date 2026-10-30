@@ -1,0 +1,53 @@
+{
+  "schema_id": "corridor",
+  "version": 1,
+  "asset_id": "jiangnan.corridor",
+  "kind": "corridor",
+  "defaults": {
+    "building_type": "corridor",
+    "style": "unspecified",
+    "length": 11,
+    "width": 3,
+    "column_spacing": 3,
+    "column_height": 3,
+    "roof_type": "gable",
+    "roof_section": {"profile": "symmetric_gable", "rise": 1},
+    "eaves": 1,
+    "materials": {
+      "floor": "minecraft:spruce_planks",
+      "column": "minecraft:stripped_spruce_log",
+      "beam": "minecraft:stripped_spruce_log",
+      "roof": "minecraft:polished_deepslate_stairs",
+      "eaves": "minecraft:deepslate_tile_slab[type=bottom,waterlogged=false]"
+    },
+    "interfaces": {"passage_width": null}
+  },
+  "independent_fields": [
+    "building_type", "style", "length", "width", "column_spacing", "column_height", "roof_type", "roof_section", "eaves", "materials", "interfaces"
+  ],
+  "derived_fields": {
+    "platform_length": "length",
+    "platform_width": "width",
+    "post_x_positions": "sorted(set(range(0, length, column_spacing)) | {length - 1})",
+    "post_count_per_side": "len(post_x_positions)",
+    "effective_passage_width": "max(1, width - 2) when interfaces.passage_width is null"
+  },
+  "generator_fields": {
+    "length": "length",
+    "width": "width",
+    "column_spacing": "column_spacing",
+    "column_height": "column_height",
+    "roof_section.rise": "roof_rise",
+    "eaves": "eaves",
+    "materials": "materials"
+  },
+  "adapter_fields": {"interfaces.passage_width": "passage_width"},
+  "legacy_aliases": {
+    "roof_rise": "roof_section.rise",
+    "passage_width": "interfaces.passage_width"
+  },
+  "hard_constraints": [
+    {"id": "corridor-parameter-validation", "validator": "CorridorParameters", "source_id": "generator.corridor.v1"}
+  ],
+  "soft_constraints": []
+}

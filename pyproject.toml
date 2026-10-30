@@ -12,12 +12,25 @@ dependencies = ["nbtlib>=2.0.4,<3"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<9"]
+mcp = ["mcp>=1.26,<2"]
 
 [project.scripts]
 jiangnan = "jiangnan_agent.cli:main"
+jiangnan-mcp = "jiangnan_agent.agent_tools.mcp_server:main"
 
 [tool.setuptools.packages.find]
 include = ["jiangnan_agent*"]
+
+[tool.setuptools.package-data]
+jiangnan_agent = [
+    "knowledge/v*/*.json",
+    "parameters/v*/*.json",
+    "assets/v*/*.json",
+    "library/catalog/v*/*.json",
+    "library/styles/v*/*.json",
+    "library/parameters/v*/*.json",
+    "library/migrations/*.sql",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

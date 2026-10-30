@@ -1,6 +1,6 @@
 # Jiangnan Architect Agent
 
-本地运行的江南建筑生成项目，目标 Minecraft Java 1.21.5（DataVersion 4325）。当前完成项目初始化和方块数据引擎阶段：工程 JSON 可保存/加载，稀疏方块模型可生成并导出 Sponge Schematic v3 `.schem`。
+本地运行的江南建筑生成项目，目标 Minecraft Java 1.21.5（DataVersion 4325）。当前包含工程 JSON、稀疏方块模型、Sponge Schematic v3 `.schem` 读写、参数化建筑生成器和可验证的模块组合内核。
 
 ## 环境安装
 
@@ -9,7 +9,7 @@
 ```powershell
 cd E:\MCbuild
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
 也可以直接调用虚拟环境的 Python：
@@ -17,6 +17,31 @@ python -m pip install -e ".[dev]"
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
+
+## Codex 本地建筑工具
+
+本机 MCP stdio 服务让当前 Codex 调用 Python 建筑引擎和只读知识检索。方块生成、工程保存、校验与 `.schem` 导出都在本机执行；地域知识工具返回文献来源、置信度和适用范围。本方案不调用模型 API，也不需要 API 密钥。
+
+在 `E:\MCbuild` 的 PowerShell 中安装 MCP 可选依赖并注册服务：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,mcp]"
+codex mcp add jiangnan-architect -- "E:\MCbuild\.venv\Scripts\python.exe" -m jiangnan_agent.agent_tools.mcp_server --workspace-root "E:\MCbuild"
+codex mcp list
+```
+
+注册后重新加载 Codex；如果工具仍未出现，重启 Codex 后再开一个对话。服务只通过标准输入输出与 Codex 通信，不开放网络端口。
+
+首版提供以下工具：
+
+- 工程与模块：`list_projects`、`get_project`、`create_project`、`list_modules`、`get_module`、`create_module`
+- 知识查询：`list_knowledge_rules`（支持知识版本、地区、建筑类型和证据类型筛选）
+- 参数与装配：`set_parameters`、`transform_module`、`connect_modules`、`replace_module`
+- 检查与导出：`validate_assembly`、`inspect_changes`、`export_schematic`
+
+当前生成器支持 `hall` 和 `corridor`。`project_path` 相对于 `workspace/projects`，`output_path` 相对于 `workspace/exports`；工具拒绝越界路径和覆盖已存在的新文件。每次模块修改都会保存为工程历史版本。可用 `inspect_changes` 查看差异，使用 `jiangnan history`、`jiangnan undo` 和 `jiangnan redo` 查看或恢复版本。
+
+工具只在工程目录中读写 JSON，只把 `.schem` 写到 exports 目录；不会删除文件、打开或修改 Minecraft 世界存档。Schematic 请先在独立测试世界中用 WorldEdit 验证。
 
 ## 创建、读取工程
 
@@ -28,20 +53,121 @@ jiangnan info workspace\projects\suzhou-hall.jap.json
 
 工程文件以 JSON 保存，包括工程 ID、目标 Minecraft 版本、DataVersion、模块列表与生成设置。
 
-## 生成第一栋简单房屋
+版本 2 工程还保存模块的方块、生成参数、连接锚点、净空区和组合关系；版本 1 工程可直接读取，保存时迁移为版本 2。
+
+查看编辑记录并撤销/重做：
+
+```powershell
+jiangnan history workspace\projects\suzhou-hall.jap.json
+jiangnan undo workspace\projects\suzhou-hall.jap.json
+jiangnan redo workspace\projects\suzhou-hall.jap.json
+```
+
+Python API 可按模块 ID 重新生成厅堂或直廊，记录方块差异，并在工程中保留撤销/重做快照：示例先从 `examples/hall_v1_parameters.json` 创建确定的 `hall-main` fixture，再编辑并保存。
+
+```python
+from pathlib import Path
+
+from examples.hall_main_fixture import create_hall_main_fixture
+from jiangnan_agent.io import ProjectEditor, save_project
+
+project_path = Path("workspace/projects/editable-hall.jap.json")
+project = create_hall_main_fixture()
+save_project(project, project_path)
+ProjectEditor(project).regenerate_module("hall-main", {"bay_count": 5}, "调整为五开间")
+save_project(project, project_path)
+```
+
+## 生成建筑
 
 ```powershell
 jiangnan generate --project workspace\projects\suzhou-hall.jap.json
 ```
 
-默认生成到 `workspace\exports` 下的安全文件名 `.schem`。工程中的 `settings.building` 可调整 `width`、`length`、`wall_height`、`roof_overhang` 和方块材料。`.schem` 为 Sponge v3 gzip-NBT，可使用 WorldEdit 导入测试世界。不要让生成器直接写入已有 Minecraft 存档。
+默认生成到 `workspace\exports` 下的安全文件名 `.schem`。`simple_house` 可调整 `width`、`length`、`wall_height`、`roof_overhang` 和方块材料。`.schem` 为 Sponge v3 gzip-NBT，可使用 WorldEdit 导入测试世界。不要让生成器直接写入已有 Minecraft 存档。
+
+当前生成来源规则：
+
+- Assembly 非空时，先验证并导出当前模块组合。即使工程还带有 `settings.building`，也只使用 Assembly。
+- Assembly 验证或渲染失败时直接报告错误，不回退到旧设置。
+- Assembly 为空时，继续按 `settings.building` 生成单体房屋或厅堂。
+
+未来可以增加 `source="auto" | "assembly" | "legacy"` 显式选择；目前尚未实现该参数，`auto` 的预期行为与以上规则一致。
 
 仓库内的示例工程：
 
 ```powershell
 jiangnan validate examples\three_bay_house.jap.json
 jiangnan generate --project examples\three_bay_house.jap.json
+jiangnan validate examples\three_bay_hall.jap.json
+jiangnan generate --project examples\three_bay_hall.jap.json
 ```
+
+`hall` 工程可调 `bay_count`（奇数开间）、`bay_width`、`depth`、`column_height`、`plinth_height`、`roof_rise`、`eaves`、`door_width` 和 `materials`。生成器会按参数同步调整柱网、梁、墙、门窗、台基、檐口和屋顶。
+
+## 版本化知识、参数与资产
+
+厅堂与直廊的新模块通过版本化资产登记创建，执行仍映射到现有 `HallParameters`、`CorridorParameters` 和生成器。参数 schema 将独立输入、派生结果、硬约束与软提示分开，并记录参数来源类别；冲突字段或不支持版本会明确报错。模块工程记录资产、知识库、参数 schema 和来源元数据，旧工程仍可读取。
+
+当前知识库默认为 v3，来源、规则和地域配置分别存放；v1/v2 可显式读取。只有 `huizhou_core`（西递、宏村的村落级官方描述）和 `jiangnan_suzhou`（苏州古典园林的园林级官方描述）启用。其他候选地域为 `catalog_only`；未取得全文和定位的地方资料及对应规则标为待核查，并从普通查询中隐藏。当前资产目录为 v3，hall/corridor 资产 v3 使用参数 schema v2，并仍调用原有方块生成器；v1/v2 资产和 schema 保持可读，既有方块输出不变。新资产的地域标签只表达设计目标，不代表历史形制已经验证。
+
+可复现的三开间参数样例见 `examples/hall_v1_parameters.json`（为兼容演示而固定 asset v2/schema v1）。`bay_spacing` 映射到现有参数 `bay_width`；当前屋顶断面仅支持生成器实现的对称双坡。新参数的来源类别和模块资产示例见 [`docs/parameter-registry.md`](docs/parameter-registry.md)；地域范围、来源核查等级和待核查记录见 [`docs/knowledge-regions.md`](docs/knowledge-regions.md)。用户 `.litematic` 只登记为视觉偏好参考，不作为历史证据。
+
+## 本地建筑参考库（DB-1）
+
+SQLite 参考库索引知识来源、地域规则、模块定义、参数 schema、风格预设以及用户本地的投影文件统计。工程 JSON 仍是可编辑工程的唯一快照；参考库不会替代工程、改写生成器或向工程/世界写入方块。默认数据库是被 Git 忽略的 `workspace\library\architect_library.sqlite3`；原始 `.litematic` 和预览图继续留在文件系统。
+
+```powershell
+jiangnan library init
+jiangnan library import "Template\芳堂-茯茯角.litematic" --asset-id reference.fangtang --name "芳堂-茯茯角" --building-type hall
+jiangnan library import "Template\流苏坊框架-茯茯角.litematic" --asset-id reference.liusufang-frame --name "流苏坊框架-茯茯角" --building-type frame
+jiangnan library previews reference.fangtang `
+  --file workspace\previews\template-reference-20261029\fangtang_front.png `
+  --file workspace\previews\template-reference-20261029\fangtang_side.png
+jiangnan library list references
+jiangnan library materials reference.fangtang
+jiangnan library list regions
+jiangnan library list sources
+jiangnan library list rules --region huizhou_core
+jiangnan library list parameters
+jiangnan library parameter minecraft_building_design
+jiangnan library module jiangnan.hall
+jiangnan library style jiangnan_mc_classic
+jiangnan library verify
+jiangnan library backup --output workspace\library\backup-2026-10-30.sqlite3
+```
+
+知识来源/规则/地域目录与模块、参数、风格 JSON 是可审阅的版本化定义；SQLite 使用迁移版本 3 保存索引、关系和投影材料/高度层聚合。初始化和重复导入具有幂等性；若同一资产 ID 对应文件内容发生变化，会登记下一个资产版本。`library verify` 检查原始投影 SHA-256 和已登记预览文件是否仍存在。备份数据库时也要单独备份原始投影与预览图，因为 SQLite 不复制这些外部大文件。
+
+`minecraft_building_design@1` 参数登记表覆盖整体尺寸、开间与柱网、屋顶断面、檐口、材料、门窗比例、装饰密度、参考资产和模块连接约束。每项标记为当前生成器支持、部分支持、仅风格建议或规划字段。它不扩展现有生成器：例如屋脊轮廓、翘角、屋面层次和装饰密度保留空默认值并标为未实现；历史文献、测绘、参考投影统计、用户输入、派生值和 Minecraft 创作适配分别标记来源类别。
+
+导入器只读解析 Litematica NBT，保留源文件、区域正负尺寸、坐标、方块状态及原始 SHA-256；数据库只存材料和 Y 层统计，不逐方块建表。当前已登记的两份本地模板 DataVersion 均为 3465，低于项目目标 1.21.5 / DataVersion 4325；状态会标为“需复核”，不会自动升级方块或声称已在目标版本实机验证。其区域归属保持未核查。`jiangnan_mc_classic` 与 `huizhou_mc_classic` 是可覆盖的 Minecraft 视觉创作预设；材料候选来自实际投影频次，屋顶/墙体语义没有可靠分类时仍标记未核查。作者元数据为 `Paper_Angle`，授权未知，默认不授予再分发权。
+
+完整 Schema、表关系、备份步骤、导入数字和待验事项见 [`docs/library-db-1.md`](docs/library-db-1.md)。
+
+## 三维预览与修改对比
+
+`jiangnan preview` 调用 Mine2Blend 将 Sponge `.schem` 转成 OBJ，再用 Blender 后台渲染俯视、正面、侧面和透视图。需要本机安装 Mine2Blend 和 Blender；输出目录必须为空或尚不存在，程序不会覆盖已有预览。
+
+```powershell
+$mine2blend = "E:\MCbuild\Mine2Blend\mcblock_mine2blend"
+$blender = "D:\SteamLibrary\steamapps\common\Blender\blender.exe"
+jiangnan preview `
+  --schematic workspace\exports\three_bay_hall-phase2.schem `
+  --output-dir workspace\previews\hall-v1 `
+  --mine2blend-root $mine2blend `
+  --blender $blender
+```
+
+可增加 `--compare-before <旧版本.schem>` 同时渲染新旧版本，并生成 `comparison.json`，其中包含按方块状态计算的新增、删除、替换和变化数量。每次预览另生成 `preview.json`，记录输入、尺寸、工具版本、相机范围和图片位置。
+
+## 模块组合示例
+
+```powershell
+python -m examples.two_courtyard
+```
+
+示例将三座厅堂、两段直廊和四面院墙保留为独立模块，通过门洞与边界锚点连接，校验后输出 `workspace\exports\two_courtyard.schem`。也可以在 Python 中调用 `build_two_courtyard()`，再用 `replace_corridor_roof()` 单独替换一段廊子的屋顶材料。此示例验证的是几何连接规则，不代表经过文献考证的营造方案。
 
 ## 开发与检查
 
@@ -49,14 +175,25 @@ jiangnan generate --project examples\three_bay_house.jap.json
 python -m pytest
 ```
 
-GitHub Actions 在 Windows 和 Ubuntu、Python 3.12 上运行同一套 pytest。
+GitHub Actions 的必需验收运行于 Windows x64、Python 3.12，并安装 `[dev,mcp]`；Ubuntu 只作非阻塞的兼容性检查。推荐本机在 Windows PowerShell 中运行：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,mcp]"
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+真实软件验收状态与复现步骤见 [`docs/windows-acceptance.md`](docs/windows-acceptance.md)。
 
 ## 目录
 
 - `jiangnan_agent/core/`：方块、坐标、边界、稀疏方块模型和变换。
+- `jiangnan_agent/assembly/`：模块锚点、平移/旋转/镜像、连接图、拆分/替换、冲突校验和组合渲染。
 - `jiangnan_agent/io/`：工程 JSON 与 Sponge v3 读写。
-- `jiangnan_agent/generators/`：当前简单房屋生成器。
+- `jiangnan_agent/knowledge/`、`parameters/`、`assets/`：版本化知识规则、参数 schema 与模块资产清单。
+- `jiangnan_agent/preview/`：Mine2Blend 转换、Blender 四视图渲染和方块差异报告。
+- 工程编辑器保存完整组合快照、方块差异，并提供撤销/重做。
+- `jiangnan_agent/generators/`：基础构件、参数化厅堂/直廊与简单房屋生成器。
 - `tests/`：方块模型、工程 JSON、命令行、Sponge 文件和简单房屋测试。
 - `docs/roadmap.md`：完整九阶段路线图。
 
-后续阶段按路线图逐步增加参数化构件、模块组合、工程历史、AI Agent、Blender 预览和知识库。
+当前工作已包括参数化构件、模块组合、工程历史、Codex 本地工具接入、版本化知识/参数/资产基础，以及 Mine2Blend/Blender 预览。知识查询仅返回有范围标记的规则，不会自动改变生成器。后续按路线图增加可验证的专业构件和更多地域来源。

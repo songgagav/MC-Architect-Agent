@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "source_id": "generator.hall.v1",
+      "source_type": "project_code",
+      "title": "Current hall generator behavior",
+      "locator": "jiangnan_agent/generators/hall.py:generate_hall"
+    },
+    {
+      "source_id": "generator.corridor.v1",
+      "source_type": "project_code",
+      "title": "Current corridor generator behavior",
+      "locator": "jiangnan_agent/generators/hall.py:generate_corridor"
+    },
+    {
+      "source_id": "user.modular-buildings.v1",
+      "source_type": "user_requirement",
+      "title": "User requirement for independent modular buildings",
+      "locator": "conversation: user requested individual buildings with freely combinable modules"
+    }
+  ],
+  "rules": [
+    {
+      "rule_id": "hall-footprint-width",
+      "source_id": "generator.hall.v1",
+      "applicable_regions": ["unspecified"],
+      "building_types": ["hall"],
+      "evidence_kind": "minecraft_adaptation",
+      "basis": "generate_hall computes width as bay_count * bay_width + 1 blocks.",
+      "confidence": "high",
+      "scope": "Current voxel generator behavior only; it is not a historical dimension or regional standard.",
+      "statement": "The generated hall footprint width follows the current bay-grid formula."
+    },
+    {
+      "rule_id": "hall-front-window-width",
+      "source_id": "generator.hall.v1",
+      "applicable_regions": ["unspecified"],
+      "building_types": ["hall"],
+      "evidence_kind": "minecraft_adaptation",
+      "basis": "The current generator uses min(2, bay_width - 3) for a front window width.",
+      "confidence": "high",
+      "scope": "This warning describes the current Minecraft block output; it is not an architectural recommendation.",
+      "statement": "A bay spacing below five blocks narrows the default front window."
+    },
+    {
+      "rule_id": "corridor-post-grid",
+      "source_id": "generator.corridor.v1",
+      "applicable_regions": ["unspecified"],
+      "building_types": ["corridor"],
+      "evidence_kind": "minecraft_adaptation",
+      "basis": "The generator places posts at range(0, length, column_spacing) and also at length - 1.",
+      "confidence": "high",
+      "scope": "Current straight-corridor generator behavior only.",
+      "statement": "The corridor post grid always includes the final end position."
+    },
+    {
+      "rule_id": "user-independent-modules",
+      "source_id": "user.modular-buildings.v1",
+      "applicable_regions": ["not_applicable"],
+      "building_types": ["any"],
+      "evidence_kind": "user_preference",
+      "basis": "The user requested individual buildings with modular parts that can be freely combined.",
+      "confidence": "high",
+      "scope": "Product design preference; it does not assert a historical construction fact.",
+      "statement": "Buildings should remain individually addressable and freely combinable as modules."
+    }
+  ]
+}

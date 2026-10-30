@@ -6,7 +6,7 @@
 
 ### Phase 0 — 项目初始化
 
-建立独立 Git 仓库、Python 环境、项目配置、pytest 和 CI。支持读取/保存工程配置并运行首条 CLI 命令。**本地实现完成；GitHub 远端尚未连接。**
+建立独立 Git 仓库、Python 环境、项目配置、pytest 和 CI。支持读取/保存工程配置并运行首条 CLI 命令。**实现完成，基线已上传 GitHub。**
 
 ### Phase 1 — Minecraft 方块数据引擎
 
@@ -14,27 +14,31 @@
 
 ### Phase 2 — 参数化古建筑构件引擎
 
-实现柱、梁、墙、门窗、台基、屋顶、檐口、回廊等生成器；开间、进深、柱高、屋顶坡度、出檐和材料均可调。验证三开间、五开间及参数变化后的结构连接。
+实现柱、梁、墙、门窗、台基、屋顶、檐口、回廊等基础生成器，并可参数化生成厅堂和直廊；开间、进深、柱高、屋顶坡度、出檐和材料可调。**基础实现与自动化验收完成；游戏内外观和放置验证待进行。**
 
 ### Phase 3 — 模块化组合系统
 
-组合门楼、厅堂、厢房、亭子、回廊等模块；定义连接锚点、占地边界、方向和连接规则。支持平移、旋转、镜像、连接、拆分、替换，并检测碰撞、门洞错位、檐口冲突和接缝高差。
+组合门楼、厅堂、厢房、亭子、回廊等模块；定义连接锚点、占地边界、方向和连接规则。支持平移、旋转、镜像、连接、拆分、替换，并检测碰撞、门洞错位、檐口冲突和接缝高差。**组合内核、自动验证和两进院落示例完成；游戏内拼装与外观验证待进行。**
 
 ### Phase 4 — 工程保存与局部修改系统
 
-建立 JiangnanProject 工程格式、对象 ID、模块参数和连接关系、变更记录、版本快照与撤销；局部修改尽量不影响其他模块。
+建立版本化 `JiangnanProject` JSON，保存完整组合、对象 ID、模块参数和连接关系；记录方块级差异与不可变版本快照，支持撤销/重做。按模块 ID 只重生成目标厅堂或直廊，保留其他模块数据；尺寸变化造成的连接错位交由 Phase 3 校验器报告。**实现与自动化验收完成；游戏内长期编辑与外观验证待进行。**
 
-### Phase 5 — 接入 GPT-6 Agent
+当前 `generate` 来源规则：Assembly 非空时优先验证并导出 Assembly，即使 `settings.building` 同时存在也不参与生成；Assembly 验证/渲染失败时报错且不回退。Assembly 为空时使用旧生成设置。未来可增加 `source="auto" | "assembly" | "legacy"`，其中 `auto` 延续当前规则；现阶段不实现该参数。
 
-在模块引擎稳定后研究 OpenAI Agents SDK。第一版使用单一总控 Agent；模型输出结构化决策和工具参数，由本地工具生成方块。
+### Phase 5 — Codex 本地建筑工具接入
+
+由当前 Codex 通过本机 MCP stdio 服务调用 Python 建筑引擎。工具覆盖工程和模块读取、厅堂/直廊创建、参数修改、模块变换与连接、工程校验、历史差异检查和 `.schem` 导出。模型只选择结构化参数，方块由本地程序生成；不调用模型 API，也不要求 Agents SDK。**实现、自动化验收及 Codex 自然语言闭环验收完成。Minecraft/WorldEdit 实机放置仍待人工验证。**
 
 ### Phase 6 — 三维预览与视觉审核
 
-先手动验证 `.schem` 到 Mine2Blend/Blender 的导入，再探索自动导入与后台渲染。提供俯视、正面、侧面、透视预览和修改对比。
+使用 Mine2Blend 将 Sponge `.schem` 转成 OBJ，并调用 Blender 后台渲染俯视、正面、侧面、透视四视图。输出 `preview.json` 记录工具/输入/图片信息；可选的新旧 `.schem` 对比会生成逐方块状态差异统计和成对视图。已在本机 Mine2Blend 转换器与 Blender 5.2.3 上完成三开间厅堂的真实转换和四视图渲染，包含相机裁切回归修正。**实现与本机自动化验收完成；其他 Mine2Blend/Blender 版本和不同资源包仍需验证。**
+
+示例命令和输入输出约束见 README 的“三维预览与修改对比”。此功能只读取 `.schem` 并写入新的预览目录，不访问 Minecraft 世界。
 
 ### Phase 7 — 江南古建筑知识库与专业构件
 
-建立带文献出处和适用地域的知识库，扩展苏式民居、徽派、屋顶、花窗、马头墙、石桥、亭榭、假山、池塘等；参考图中的无法确认尺寸需标为估算。
+Knowledge Base v3 已将来源、规则、地域配置拆分为独立版本化文件，并为规则登记来源元数据、地域、核查状态和适用范围。当前仅 `huizhou_core`（西递、宏村的 UNESCO 村落级描述）与 `jiangnan_suzhou`（苏州古典园林的 UNESCO 园林级描述）处于 active；其他地域为 `catalog_only`。本次无法读取全文的地方网页及相关旧摘要留在 pending 状态，不进入默认查询或生成。知识库 v1/v2 保持兼容。hall/corridor 参数 schema v2 和资产目录 v3 已登记五类来源、地域设计目标、知识上下文引用和 Minecraft 1.21.5；现有 generator 与模块接口不变，asset/schema v1/v2 保持兼容。数值默认值只作为可复现的 Minecraft 输入，不是历史标准。后续为新构件引入可核查的调查和测绘来源，并仅在有证据的字段启用相应 provenance 类别。
 
 ### Phase 8 — 本地设计工作台与完整验收
 
@@ -52,11 +56,12 @@
 
 | 工具组 | 典型工具 | 职责 |
 | --- | --- | --- |
-| 模块管理 | `list_modules`, `create_module`, `get_module` | 查找、创建、读取模块 |
-| 建筑设计 | `generate_building`, `set_parameters` | 创建和调整建筑 |
-| 组合装配 | `connect_modules`, `rotate_module`, `replace_module` | 对齐、组合、替换 |
-| 质量检查 | `validate_assembly`, `inspect_changes` | 检查结构、冲突和变更 |
-| 工程交付 | `save_project`, `render_preview`, `export_schematic` | 保存、渲染、导出 |
+| 工程与模块 | `list_projects`, `get_project`, `create_project`, `list_modules`, `get_module`, `create_module` | 查找、创建和读取工程模块 |
+| 参数与装配 | `set_parameters`, `transform_module`, `connect_modules`, `replace_module` | 生成、调整和组合厅堂/直廊 |
+| 质量检查 | `validate_assembly`, `inspect_changes` | 检查冲突并读取有界版本差异 |
+| 工程交付 | `export_schematic` | 校验并导出 Sponge v3 文件 |
+
+首版 MCP 工具名以项目 README 与服务注册表为准。版本撤销和重做继续由现有 `jiangnan history/undo/redo` CLI 提供；三维预览属于 Phase 6。
 
 ## 质量要求
 
