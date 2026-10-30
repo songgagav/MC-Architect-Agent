@@ -20,6 +20,158 @@ from .roof_profiles import (
 Material = BlockState | str
 _HORIZONTAL_FACES = ("north", "east", "south", "west")
 _AXIS_BLOCK_SUFFIXES = ("_log", "_wood", "_stem", "_hyphae")
+# Geometry checks are conservative for the pinned vanilla target; unknown families fail closed.
+_NON_FULL_BLOCK_SUFFIXES = (
+    "_stairs",
+    "_slab",
+    "_fence",
+    "_fence_gate",
+    "_wall",
+    "_door",
+    "_trapdoor",
+    "_button",
+    "_pressure_plate",
+    "_rail",
+    "_pane",
+    "_sign",
+    "_banner",
+    "_carpet",
+    "_bed",
+    "_chest",
+    "_skull",
+    "_head",
+    "_torch",
+    "_sapling",
+)
+_NON_FULL_BLOCK_IDS = frozenset(
+    {
+        "minecraft:torch",
+        "minecraft:lantern",
+        "minecraft:soul_lantern",
+        "minecraft:soul_sand",
+        "minecraft:chain",
+        "minecraft:iron_bars",
+        "minecraft:cobweb",
+        "minecraft:ladder",
+        "minecraft:lever",
+        "minecraft:redstone_wire",
+        "minecraft:repeater",
+        "minecraft:comparator",
+        "minecraft:lightning_rod",
+        "minecraft:end_rod",
+        "minecraft:candle",
+        "minecraft:scaffolding",
+        "minecraft:tripwire",
+        "minecraft:tripwire_hook",
+        "minecraft:flower_pot",
+        "minecraft:dead_bush",
+        "minecraft:short_grass",
+        "minecraft:tall_grass",
+        "minecraft:fern",
+        "minecraft:large_fern",
+        "minecraft:dandelion",
+        "minecraft:poppy",
+        "minecraft:blue_orchid",
+        "minecraft:allium",
+        "minecraft:azure_bluet",
+        "minecraft:cornflower",
+        "minecraft:oxeye_daisy",
+        "minecraft:lily_of_the_valley",
+        "minecraft:torchflower",
+        "minecraft:wither_rose",
+        "minecraft:open_eyeblossom",
+        "minecraft:closed_eyeblossom",
+        "minecraft:large_amethyst_bud",
+        "minecraft:medium_amethyst_bud",
+        "minecraft:small_amethyst_bud",
+        "minecraft:amethyst_cluster",
+    }
+)
+_FULL_BLOCK_SUFFIXES = (
+    "_block",
+    "_bricks",
+    "_planks",
+    "_log",
+    "_wood",
+    "_stem",
+    "_hyphae",
+    "_wool",
+    "_concrete",
+    "_concrete_powder",
+    "_terracotta",
+    "_ore",
+    "_sand",
+    "_gravel",
+    "_dirt",
+    "_soil",
+    "_stone",
+    "_granite",
+    "_diorite",
+    "_andesite",
+    "_tuff",
+    "_deepslate",
+    "_blackstone",
+    "_copper",
+    "_quartz",
+    "_ice",
+    "_glass",
+    "_basalt",
+    "_obsidian",
+    "_prismarine",
+    "_pumpkin",
+    "_melon",
+    "_purpur",
+)
+_FULL_BLOCK_IDS = frozenset(
+    {
+        "minecraft:stone",
+        "minecraft:granite",
+        "minecraft:diorite",
+        "minecraft:andesite",
+        "minecraft:tuff",
+        "minecraft:deepslate",
+        "minecraft:glass",
+        "minecraft:glowstone",
+        "minecraft:ice",
+        "minecraft:obsidian",
+        "minecraft:netherrack",
+        "minecraft:prismarine",
+        "minecraft:purpur_pillar",
+        "minecraft:jack_o_lantern",
+        "minecraft:pumpkin",
+        "minecraft:melon",
+        "minecraft:podzol",
+        "minecraft:mycelium",
+        "minecraft:sculk",
+        "minecraft:cobblestone",
+        "minecraft:bedrock",
+        "minecraft:clay",
+        "minecraft:sponge",
+        "minecraft:wet_sponge",
+        "minecraft:bricks",
+        "minecraft:bookshelf",
+        "minecraft:chiseled_bookshelf",
+        "minecraft:crafting_table",
+        "minecraft:furnace",
+        "minecraft:blast_furnace",
+        "minecraft:smoker",
+        "minecraft:barrel",
+        "minecraft:note_block",
+        "minecraft:jukebox",
+        "minecraft:dispenser",
+        "minecraft:dropper",
+        "minecraft:observer",
+        "minecraft:piston",
+        "minecraft:sticky_piston",
+        "minecraft:beacon",
+        "minecraft:target",
+        "minecraft:hay_block",
+        "minecraft:dried_kelp_block",
+        "minecraft:ancient_debris",
+        "minecraft:dragon_egg",
+        "minecraft:sea_lantern",
+    }
+)
 
 
 def _material(value: Material) -> BlockState:
@@ -352,7 +504,12 @@ def _surface_state(
         if not state.block_id.endswith("_slab"):
             raise ValueError(f"material for slab surface role {material_role!r} must be a slab block")
         return _state_with(state, type="top", waterlogged="false")
-    if state.block_id.endswith(("_stairs", "_slab")):
+    state_properties = dict(state.properties)
+    double_slab = state.block_id.endswith("_slab") and state_properties.get("type") == "double"
+    known_non_full = state.block_id in _NON_FULL_BLOCK_IDS or state.block_id.endswith(_NON_FULL_BLOCK_SUFFIXES)
+    known_full = state.block_id in _FULL_BLOCK_IDS or state.block_id.endswith(_FULL_BLOCK_SUFFIXES)
+    vanilla_namespace = state.block_id.startswith("minecraft:")
+    if not ((double_slab and vanilla_namespace) or (known_full and not known_non_full and vanilla_namespace)):
         raise ValueError(f"material for full_block surface role {material_role!r} must be a full block")
     return state
 
@@ -424,7 +581,7 @@ def generate_eaves_component(
                     owned.add(position)
     if eave_profile.decoration_role is not None:
         decoration = _material(palette.roles[eave_profile.decoration_role])
-        y = base_y - eave_profile.thickness - 1
+        y = base_y + 1
         for x in range(start_x, end_x, eave_profile.decoration_spacing):
             for z in edge_zs:
                 model.set_block((x, y, z), decoration)

@@ -144,6 +144,26 @@ def test_malformed_profile_records_are_reported_as_parameter_errors() -> None:
         )
 
 
+def test_legacy_material_alias_and_palette_state_compare_after_blockstate_normalization() -> None:
+    resolved = resolve_parameters(
+        "jiangnan.hall",
+        {
+            "materials": {
+                "roof": "oak_stairs[half=bottom,facing=north,shape=straight,waterlogged=false]"
+            },
+            "material_palette": {
+                "roof_stair": (
+                    "minecraft:oak_stairs[waterlogged=false,shape=straight,facing=north,half=bottom]"
+                )
+            },
+        },
+    )
+
+    assert resolved.generator_parameters.material_palette.roles["roof_stair"] == (
+        "minecraft:oak_stairs[facing=north,half=bottom,shape=straight,waterlogged=false]"
+    )
+
+
 def test_legacy_roof_section_requires_symmetric_gable_and_maps_its_rise() -> None:
     resolved = resolve_parameters(
         "jiangnan.hall",

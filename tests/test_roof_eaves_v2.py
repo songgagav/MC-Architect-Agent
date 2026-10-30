@@ -87,6 +87,67 @@ def test_surface_bands_choose_the_material_at_the_ridge_endpoint() -> None:
     assert roof.block_at((0, 10, 2)) == BlockState.parse("minecraft:stone_bricks")
 
 
+@pytest.mark.parametrize(
+    "material",
+    (
+        "minecraft:glass_pane",
+        "minecraft:oak_fence",
+        "minecraft:oak_door",
+        "minecraft:torch",
+        "example:modded_full_block",
+    ),
+)
+def test_full_block_surface_rejects_known_non_full_block_materials(material: str) -> None:
+    generate = _builder("generate_roof_surface")
+    roles = dict(_palette().roles)
+    roles["roof_block"] = material
+    with pytest.raises(ValueError, match="must be a full block"):
+        generate(
+            1,
+            3,
+            0,
+            RoofProfile(ridge_height=1, surface_bands=(SurfaceBand(0, 1000, "full_block", "roof_block"),)),
+            EaveProfile(
+                side_overhang=0,
+                gable_end_treatment="hard_gable",
+                gable_end_projection=0,
+                thickness=0,
+                layer_roles=(),
+            ),
+            MaterialPalette(roles),
+        )
+
+
+@pytest.mark.parametrize(
+    "material",
+    (
+        "minecraft:sea_lantern",
+        "minecraft:glass",
+        "minecraft:stone_brick_slab[type=double,waterlogged=false]",
+    ),
+)
+def test_full_block_surface_accepts_registered_full_cube_materials(material: str) -> None:
+    generate = _builder("generate_roof_surface")
+    roles = dict(_palette().roles)
+    roles["roof_block"] = material
+    roof = generate(
+        1,
+        3,
+        0,
+        RoofProfile(ridge_height=1, surface_bands=(SurfaceBand(0, 1000, "full_block", "roof_block"),)),
+        EaveProfile(
+            side_overhang=0,
+            gable_end_treatment="hard_gable",
+            gable_end_projection=0,
+            thickness=0,
+            layer_roles=(),
+        ),
+        MaterialPalette(roles),
+    )
+
+    assert roof.block_at((0, 1, 1)) == BlockState.parse(material)
+
+
 def test_roof_slab_band_uses_a_top_half_state() -> None:
     generate = _builder("generate_roof_surface")
     roof = generate(
@@ -273,6 +334,41 @@ def test_explicit_default_profiles_match_the_legacy_hall_and_corridor_hashes() -
 
     assert _canonical_hash(hall) == "af86496dad80003d609d31a98e24a50957da419d32ca39a9ca622e8e61bc41b3"
     assert _canonical_hash(corridor) == "6b99402a56bb31b35e6209d64a8ac4f4f83b3b452171ea53a39bd6b1aef0d707"
+
+
+def test_eave_decoration_does_not_replace_wall_or_column_blocks() -> None:
+    eave = EaveProfile(
+        side_overhang=1,
+        gable_end_treatment="overhanging_gable",
+        gable_end_projection=1,
+        thickness=1,
+        layer_roles=("eaves",),
+        decoration_role="decoration",
+        decoration_spacing=2,
+    )
+    palette = _palette()
+    hall = generate_hall(HallParameters(eave_profile=eave, material_palette=palette))
+    corridor = generate_corridor(CorridorParameters(eave_profile=eave, material_palette=palette))
+    default_hall = generate_hall()
+    default_corridor = generate_corridor()
+
+    assert hall.block_at((0, 4, 0)) == default_hall.block_at((0, 4, 0))
+    assert corridor.block_at((0, 4, 0)) == default_corridor.block_at((0, 4, 0))
+    assert hall.block_at((-1, 7, 0)) == BlockState.parse("minecraft:gold_block")
+    assert corridor.block_at((-1, 6, 0)) == BlockState.parse("minecraft:gold_block")
+
+
+@pytest.mark.parametrize("generator,parameters", [(generate_hall, HallParameters), (generate_corridor, CorridorParameters)])
+def test_eaves_reject_layers_that_extend_from_beam_into_wall(generator, parameters) -> None:
+    eave = EaveProfile(
+        side_overhang=1,
+        gable_end_treatment="overhanging_gable",
+        gable_end_projection=1,
+        thickness=3,
+        layer_roles=("eaves", "eaves", "eaves"),
+    )
+    with pytest.raises(ValueError, match="roof component overlaps existing structure"):
+        generator(parameters(eave_profile=eave, material_palette=_palette()))
 
 
 @pytest.mark.parametrize("bay_count,expected_width", [(3, 18), (5, 28)])

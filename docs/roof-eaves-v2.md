@@ -7,11 +7,11 @@ Roof & Eaves v2 扩展现有 hall 和 corridor 生成器，不替换它们。当
 | 字段 | 用途 | 主要约束 |
 | --- | --- | --- |
 | `roof_profile` | 屋脊高度、归一化半坡断面、屋面材料分段 | 屋脊高度为正整数。断面点是千分比整数，从 `(0, 0)` 开始并以 `(1000, 1000)` 结束；水平值严格递增，高度不下降。按建筑实际半跨采样后必须适配建筑宽度，相邻方块高度不能跳跃超过 1 格。材料分段必须无间隙覆盖整个断面。 |
-| `eave_profile` | 两侧出檐、山墙端处理、分层收边和可选重复装饰 | `hard_gable` 要求山墙端出檐为 0；`overhanging_gable` 要求正出檐。收边材料层数必须等于檐口厚度。 |
+| `eave_profile` | 两侧出檐、山墙端处理、分层收边和可选重复装饰 | `hard_gable` 要求山墙端出檐为 0；`overhanging_gable` 要求正出檐。收边材料层数必须等于檐口厚度。重复装饰位于檐口基准线上方 1 格，避免占用墙体或梁端。 |
 | `ridge_profile` | 可选屋脊盖脊和重复装饰 | 禁用盖脊时宽、高均为 0；启用后宽度必须为正奇数，高度为正整数。 |
 | `material_palette` | 将语义材料角色映射为完整 Minecraft BlockState | 方块状态会解析校验。拒绝空气状态，因为当前 VoxelModel 会把空气解释为删除方块。断面可引用自定义材料角色，例如 `ridge`、`roof_slab`。 |
 
-屋面材料分段支持 `stair`（楼梯）、`slab`（半砖）和 `full_block`（完整方块）。每个分段引用 `material_palette` 中的角色，可组合多种屋面形态与材料。材料使用完整方块状态，例如：
+屋面材料分段支持 `stair`（楼梯）、`slab`（半砖）和 `full_block`（完整方块）。每个分段引用 `material_palette` 中的角色，可组合多种屋面形态与材料。楼梯和半砖由生成器按形态补齐朝向及上下半部状态；`full_block` 使用 Minecraft 1.21.5 的已登记整块材质族，并拒绝玻璃板、栏杆、门、火把等已知非整块形态，以及无法核验的非原版命名空间方块。可识别范围需随新材料逐步扩展。材料使用完整方块状态，例如：
 
 ```text
 minecraft:stone_brick_stairs[facing=east,half=bottom,shape=straight,waterlogged=false]

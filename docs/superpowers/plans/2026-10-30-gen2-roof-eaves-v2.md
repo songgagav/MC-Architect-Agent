@@ -64,7 +64,7 @@
 - Keep the existing `generate_gable_roof(width, depth, base_y, rise, eaves, material) -> VoxelModel` signature as a wrapper that builds the legacy default profile.
 - The roof builder samples each actual half-run position, applies surface bands, and skips cells owned by an enabled eave edge layer or ridge cap. Declared eave-to-beam connections are allowed; other overlaps are errors.
 
-- [x] **Step 1: Write failing component tests** for stair facings on both slopes, permille band selection including the ridge endpoint, eave thickness and end projection, ridge cap width/height, ownership masks, no unintended overlap, invalid material BlockStates (including air states), and 90-degree rotation of the new component output.
+- [x] **Step 1: Write failing component tests** for stair facings on both slopes, permille band selection including the ridge endpoint, eave thickness and end projection, ridge cap width/height, ownership masks, no unintended overlap, known non-full materials in `full_block` bands, invalid material BlockStates (including air states), and 90-degree rotation of the new component output.
 - [x] **Step 2: Run `pytest tests/test_roof_eaves_v2.py tests/test_components.py -q`** and confirm expected missing behavior failures. Initial RED: 10 expected missing-builder failures, 14 legacy tests passed; the air-material regression was then added as a separate RED/GREEN check.
 - [x] **Step 3: Implement the three pure builders** using the profile models from Task 1 and preserve the legacy function as an adapter.
 - [x] **Step 4: Run those targeted tests** and confirm the new component and rotation cases pass; legacy wrapper output remains covered by Task 3's hash tests. Final expanded profile/component run: 37 passed.
@@ -85,7 +85,7 @@
 - [x] **Step 1: Write failing integration tests** for the literal baseline count/bounds/hash: hall `522`, `min=(-1,0,-1)`, `max-exclusive=(17,10,8)`, SHA-256 `af86496dad80003d609d31a98e24a50957da419d32ca39a9ca622e8e61bc41b3`; corridor `150`, `min=(-1,0,-1)`, `max-exclusive=(12,7,4)`, SHA-256 `6b99402a56bb31b35e6209d64a8ac4f4f83b3b452171ea53a39bd6b1aef0d707`. Compute each hash from UTF-8 lines `x,y,z:<BlockState>\n` sorted by `(x,y,z)`. Baseline values passed before integration.
 - [x] **Step 2: Add failing generation tests** for an explicitly supplied default profile (same literal legacy hash), 3-bay and 5-bay halls, corridor lengths 7 and 17, roof-base movement when column height changes, explicit invalid-profile errors without legacy fallback, and Schematic v3 write/read equality for a profile-driven hall and corridor. Initial RED: all 9 profile-integration cases failed because parameter objects had no profile fields.
 - [x] **Step 3: Run the focused hall and roof tests** and verify the compatibility assertions fail only because profiles are not integrated yet.
-- [x] **Step 4: Integrate roof/eave/ridge builders** in `hall.py`; use an internal unspecified sentinel to tell omitted legacy values from explicitly supplied values, then normalize to the existing effective defaults after checking profile conflicts.
+- [x] **Step 4: Integrate roof/eave/ridge builders** in `hall.py`; use an internal unspecified sentinel to tell omitted legacy values from explicitly supplied values, then normalize to the existing effective defaults after checking profile conflicts. Hall/corridor roof merges allow only declared beam-edge intersections and fail on overlaps with walls or posts.
 - [x] **Step 5: Run `pytest tests/test_hall.py tests/test_roof_profiles.py tests/test_roof_eaves_v2.py -q`** and confirm default hashes and new generation tests pass: 53 passed.
 - [x] **Step 6: Commit** as `feat: integrate roof profiles into hall and corridor`.
 
@@ -142,3 +142,9 @@
 - Confirm the default hall/corridor hashes and 90-degree transform/Schematic round-trip assertions pass.
 - Inspect `git status --short`; stage only plan-owned source/docs/tests, leaving untracked user `workspace/` data untouched.
 - Obtain one fresh whole-branch review before reporting completion. Do not report Blender, Mine2Blend, WorldEdit, or in-game visual validation unless actually run.
+
+### Post-review corrections
+
+- The first whole-branch review found that eave details could overwrite structure, `full_block` accepted known non-full block families, and material alias comparisons used raw state strings. Added regression tests and corrections: eave decorations now sit one block above the eave datum; hall/corridor merges reject every roof/body overlap except declared beam-edge coordinates; `full_block` uses a conservative vanilla 1.21.5 full-cube catalog and rejects known non-full or unknown namespace materials; palette alias comparisons use parsed `BlockState` equality.
+- After corrections, the focused roof/parameter suite passed (62 tests), the full Windows suite passed (362 tests in 12.57s), and `git diff --check` completed cleanly.
+- Obtain a fresh independent whole-branch review after these corrections.

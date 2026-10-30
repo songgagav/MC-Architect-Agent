@@ -12,6 +12,7 @@ from types import MappingProxyType
 from typing import Any
 
 from ..assets.registry import get_asset
+from ..core.block import BlockState
 from ..generators.hall import CorridorParameters, HallParameters
 from ..generators.roof_profiles import (
     EaveProfile,
@@ -594,12 +595,22 @@ def _record_and_write(
 ) -> None:
     if conflicts is not None:
         previous = conflicts.get(path)
-        if previous is not None and previous[0] != value:
+        normalized_value = _conflict_comparison_value(path, value)
+        if previous is not None and previous[0] != normalized_value:
             raise ParameterConflictError(
                 f"conflicting parameter values for {previous[1]!r} and {input_name!r}"
             )
-        conflicts[path] = (deepcopy(value), input_name)
+        conflicts[path] = (deepcopy(normalized_value), input_name)
     _write_path(target, path, value)
+
+
+def _conflict_comparison_value(path: str, value: object) -> object:
+    if path.startswith("material_palette.") and isinstance(value, str):
+        try:
+            return BlockState.parse(value)
+        except ValueError:
+            return value
+    return value
 
 
 def _derived_values(schema: ParameterSchema, config: Mapping[str, object]) -> dict[str, object]:

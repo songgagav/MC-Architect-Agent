@@ -24,7 +24,7 @@ Knowledge Base v4 将来源、规则和地域配置分别保存到 `jiangnan_age
 | `huangshan.gazette.hui-residence-elements` — [黄山市政府：徽州宅居要素](https://www.huangshan.gov.cn/zjhs/rwhz/hpjz/8294057.html) | 仅元数据可见；本次未取回正文和章节定位；相关规则为 `pending_verification` | 仅保留待核查任务 | 默认查询、参数默认值、生成器规则和历史标准 |
 | `huangshan.gazette.hui-residence` — [黄山市政府：徽州宅居](https://www.huangshan.gov.cn/zjhs/rwhz/fsmq/8294878.html) | 仅元数据可见；本次未取回正文和章节定位 | 来源目录记录 | 未核实的正文摘要或任何尺寸标准 |
 | `suzhou.garden-admin.architecture` — [苏州市园林和绿化管理局：建筑](https://ylj.suzhou.gov.cn/szsylj/ylys/201903/484421d38f504f5787a8f307925e3ad7.shtml) | 页面正文未成功取回；仅列为来源入口，不关联活动规则 | 后续全文核查入口 | 建筑形式、构造或尺寸结论 |
-| `generator.roof-eaves.v2` — 本项目屋面、檐口和屋脊构件生成器 | 已核对仓库实现 | Minecraft 屋面断面、檐口、屋脊和材料角色的确定性实现 | 历史营造事实、实测比例或地域规范 |
+| `generator.roof-eaves.v2` — 本项目屋面、檐口和屋脊构件生成器 | 已核对仓库实现 | Minecraft 屋面断面、檐口、屋脊、材料角色及构件接缝的确定性实现 | 历史营造事实、实测比例或地域规范 |
 | `resolver.parameters.v3` — 本项目参数解析器 schema v3 | 已核对仓库实现 | 参数别名归一化、派生字段和参数来源标记 | 历史建筑数值或未实现的建筑规则 |
 
 UNESCO 页面未给出页面出版日期，因此来源记录把 `publication_date` 留空，并在 `date_note` 中记录页面所列的遗产列入年份。章节定位、核查等级、访问日期均在 JSON 来源记录中。地方网页未核实的日期不会从搜索摘要推定。

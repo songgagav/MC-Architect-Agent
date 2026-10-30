@@ -105,6 +105,25 @@ def _merge(destination: VoxelModel, source: VoxelModel) -> None:
         destination.set_block(position, state)
 
 
+def _merge_roof(
+    destination: VoxelModel,
+    roof: VoxelModel,
+    *,
+    beam_y: int,
+    width: int,
+    depth: int,
+) -> None:
+    allowed_beam_connections = {
+        (x, beam_y, z)
+        for x in range(width)
+        for z in (0, depth - 1)
+    }
+    unexpected = set(destination.blocks).intersection(roof.blocks) - allowed_beam_connections
+    if unexpected:
+        raise ValueError(f"roof component overlaps existing structure at {min(unexpected)}")
+    _merge(destination, roof)
+
+
 def _roof_model(
     width: int,
     depth: int,
@@ -402,9 +421,12 @@ def generate_hall(parameters: HallParameters | None = None) -> VoxelModel:
                 ),
             )
 
-    _merge(
+    _merge_roof(
         model,
         _roof_model(width, depth, roof_base_y, parameters, materials),
+        beam_y=beam_y,
+        width=width,
+        depth=depth,
     )
     return model
 
@@ -433,8 +455,11 @@ def generate_corridor(parameters: CorridorParameters | None = None) -> VoxelMode
         _merge(model, generate_beam((0, beam_y, z), (parameters.length - 1, beam_y, z), materials["beam"]))
 
     roof_base_y = beam_y + 1
-    _merge(
+    _merge_roof(
         model,
         _roof_model(parameters.length, parameters.width, roof_base_y, parameters, materials),
+        beam_y=beam_y,
+        width=parameters.length,
+        depth=parameters.width,
     )
     return model
