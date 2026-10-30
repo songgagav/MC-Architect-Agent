@@ -304,6 +304,15 @@ class CorridorParameters:
             )
             if missing_faces:
                 raise ValueError("corridor openings require their face to be listed in enclosed_faces")
+            enclosed_long_sides = set(self.facade_profile.enclosed_faces) & {"front", "rear"}
+            if enclosed_long_sides and self.facade_profile.wall.expand_direction == "inward":
+                occupied_sides = len(enclosed_long_sides)
+                structural_edges = 2 - occupied_sides
+                clear_lane_width = width - occupied_sides * self.facade_profile.wall.thickness - structural_edges
+                if clear_lane_width < 1:
+                    raise ValueError(
+                        "inward façade wall thickness leaves no clear corridor passage lane"
+                    )
         object.__setattr__(self, "roof_rise", roof_rise)
         object.__setattr__(self, "eaves", eaves)
         object.__setattr__(self, "materials", normalized_materials)

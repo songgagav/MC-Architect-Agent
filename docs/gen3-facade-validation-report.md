@@ -37,14 +37,20 @@
 Windows Python 3.12 本次结果：
 
 - GEN-3 示例、开间联动、Schematic 回读及避免覆盖测试：通过。
-- façade profile/geometry/components、厅堂和回廊、参数/资产注册、工程 JSON、编辑历史专项集合：**223 passed**。
+- façade profile/geometry/components、厅堂和回廊、参数/资产注册、工程 JSON、编辑历史专项集合：**228 passed**。
 - MCP stdio 客户端/服务端往返测试：**1 passed**。
-- 完整 Windows pytest：**470 passed**。
+- 完整 Windows pytest：**475 passed**。
 - `git diff --check`：通过。
 
 ## 游戏内待验
 
 在新建的独立 Minecraft Java 1.21.5 创造测试世界中，用匹配版本的 WorldEdit 分别粘贴三份 `.schem`。检查入口和窗格的朝向、开合、通行、楼梯/半砖状态、屋脊、檐口、屋面缺口与实体模型。将游戏版本、WorldEdit 版本、截图和任何问题记录在此后，再把状态从 `pending` 更新为实际结果。不要使用重要存档。
+
+## 当前参数边界与后续建议
+
+- 走廊会在参数解析时拒绝向内加厚后剩余净宽小于 1 格的配置。回归覆盖单侧和双侧内墙、向外墙及不封闭墙面；宽度 5、两侧各 2 层墙仍留有 1 格通道，`start`/`end` 锚点保持原位。
+- `WindowProfile.sill_height` 为 v1 JSON 兼容字段，目前不生成窗台方块，也不移动窗口；窗口垂直位置由单个开口的 `FacadeOpening.sill_offset` 控制。后续若要参数化窗台，应新增有明确材料与占格规则的构件，而非改变此字段的既有含义。
+- 五开间徽州屋面在 Blender 中视觉占比偏重，屋面阶梯接缝和玻璃/栏杆方块的游戏内模型仍需在 Minecraft 1.21.5 复查。
 
 ## 本地预览文件
 

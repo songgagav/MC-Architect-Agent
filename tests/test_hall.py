@@ -300,6 +300,62 @@ def test_corridor_profile_cannot_close_connection_end_faces() -> None:
         CorridorParameters(facade_profile=profile)
 
 
+def test_inward_corridor_walls_preserve_a_clear_lane_or_fail_explicitly() -> None:
+    profile = FacadeProfile(
+        profile_id="thick-corridor-walls",
+        wall=WallPanelProfile(thickness=2, expand_direction="inward", layer_roles=("wall", "wall")),
+        materials={"wall": "minecraft:calcite"},
+        enclosed_faces=("front", "rear"),
+    )
+
+    with pytest.raises(ValueError, match="clear corridor passage"):
+        CorridorParameters(width=3, facade_profile=profile)
+
+    parameters = CorridorParameters(length=7, width=5, facade_profile=profile)
+    module = corridor_module("thick-profiled-corridor", parameters)
+    legacy = corridor_module("same-size-open-corridor", CorridorParameters(length=7, width=5))
+
+    assert all(module.model.block_at((x, 2, 2)).block_id == "minecraft:air" for x in range(1, 6))
+    assert tuple(
+        (anchor.name, anchor.position, anchor.facing, anchor.width, anchor.height)
+        for anchor in module.anchors
+    ) == tuple(
+        (anchor.name, anchor.position, anchor.facing, anchor.width, anchor.height)
+        for anchor in legacy.anchors
+    )
+
+
+@pytest.mark.parametrize(
+    ("width", "enclosed_faces", "expand_direction", "clear_z"),
+    (
+        (3, ("front",), "inward", None),
+        (5, ("front",), "inward", (1, 2)),
+        (3, ("front", "rear"), "outward", (1,)),
+        (3, (), "inward", (1,)),
+    ),
+    ids=("one-side-too-thick", "one-side-clearance", "outward-no-reduction", "no-walls"),
+)
+def test_corridor_clearance_only_counts_inward_walls_on_enclosed_long_sides(
+    width: int,
+    enclosed_faces: tuple[str, ...],
+    expand_direction: str,
+    clear_z: tuple[int, ...] | None,
+) -> None:
+    profile = FacadeProfile(
+        profile_id="corridor-clearance-boundary",
+        wall=WallPanelProfile(thickness=2, expand_direction=expand_direction, layer_roles=("wall", "wall")),
+        materials={"wall": "minecraft:calcite"},
+        enclosed_faces=enclosed_faces,
+    )
+    if clear_z is None:
+        with pytest.raises(ValueError, match="clear corridor passage"):
+            CorridorParameters(width=width, facade_profile=profile)
+        return
+
+    module = corridor_module("corridor-clearance-boundary", CorridorParameters(width=width, facade_profile=profile))
+    assert all(module.model.block_at((1, 2, z)).block_id == "minecraft:air" for z in clear_z)
+
+
 def test_garden_open_gallery_preset_can_be_adapted_to_an_enclosed_corridor_module() -> None:
     from dataclasses import replace
 

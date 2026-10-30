@@ -128,7 +128,12 @@ class DoorProfile:
 
 @dataclass(frozen=True)
 class WindowProfile:
-    """A grid-sized window, its sill, frame, glazing, and discrete lattice pattern."""
+    """A grid-sized window, frame, glazing, and discrete lattice pattern.
+
+    In profile v1, opening elevation is controlled by ``FacadeOpening.sill_offset``;
+    ``sill_height`` is retained in the JSON contract but does not emit a sill or move
+    the opening.
+    """
 
     width: int = 2
     height: int = 2

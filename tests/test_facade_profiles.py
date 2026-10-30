@@ -178,7 +178,7 @@ def test_hall_and_corridor_parameters_coerce_profile_mappings_to_typed_values() 
     profile_mapping = facade_profile_to_mapping(_profile())
 
     hall = HallParameters(facade_profile=profile_mapping)
-    corridor = CorridorParameters(facade_profile=profile_mapping)
+    corridor = CorridorParameters(width=5, facade_profile=profile_mapping)
 
     assert isinstance(hall.facade_profile, FacadeProfile)
     assert isinstance(corridor.facade_profile, FacadeProfile)
