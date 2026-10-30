@@ -127,6 +127,13 @@ def test_facade_profile_conflicts_only_with_explicit_legacy_inputs() -> None:
             "jiangnan.hall",
             {"facade_profile": profile, "materials": {"wall": "minecraft:stone"}},
         )
+    with pytest.raises(ValueError, match="explicit materials role 'wall' conflicts"):
+        resolve_parameters(
+            "jiangnan.hall",
+            {"facade_profile": profile},
+            base_config={"materials": {"wall": "minecraft:stone"}},
+            base_provenance={"materials": {"category": "user_input"}},
+        )
 
 
 def test_facade_presets_are_versioned_creative_configs_combinable_with_roof_presets(tmp_path: Path) -> None:

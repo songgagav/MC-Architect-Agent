@@ -900,6 +900,8 @@ def resolve_parameters(
                 explicit_input_fields.add(_top_level_parameter(schema, name))
                 if name.startswith("materials."):
                     explicit_material_roles.add(name.split(".", 1)[1])
+                elif name == "materials":
+                    explicit_material_roles.update(_provided_material_roles(base_config))
     generator_parameters, adapter_options = _resolve_generator_parameters(
         schema,
         config,

@@ -49,8 +49,9 @@ def _parameters_dict(parameters, defaults: Mapping[str, str]) -> dict[str, objec
             and not parameters._door_width_explicit
         ):
             continue
-        elif item.name == "facade_profile" and value is not None:
-            values[item.name] = facade_profile_to_mapping(value)
+        elif item.name == "facade_profile":
+            if value is not None:
+                values[item.name] = facade_profile_to_mapping(value)
         elif item.name in {"roof_profile", "eave_profile", "ridge_profile", "material_palette"}:
             if value is None:
                 continue

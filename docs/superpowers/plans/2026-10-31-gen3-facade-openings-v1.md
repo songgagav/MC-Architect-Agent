@@ -256,14 +256,14 @@
 - Modify: `tests/test_project_generation.py`
 - Modify: `tests/test_readme_examples.py`
 
-- [ ] **Write failing project/editor tests first**
+- [x] **Write failing project/editor tests first**
   - Test save/reload round-trips every typed profile to stable JSON and regenerates the same block map.
   - Test local wall/window/profile edits, undo, redo, and reopening preserve all unaffected modules and stable opening IDs.
   - Test legacy projects lacking `facade_profile` regenerate to the known hall/corridor hashes.
   - Test old explicit `door_width`/`materials` aliases conflict only when both inputs were explicit and differ after BlockState normalization.
-- [ ] Run focused tests and confirm failures.
-- [ ] Implement adapter JSON mapping and minimal editor changes; keep project format top-level structure unchanged.
-- [ ] Run project/history/readme tests and confirm pass.
+- [x] Run focused tests and confirm failures.
+- [x] Implement adapter JSON mapping and minimal editor changes; keep project format top-level structure unchanged.
+- [x] Run project/history/readme tests and confirm pass: **69 passed**.
 - [ ] Commit compatibility and history coverage: `test: cover façade project history compatibility`.
 
 ### Task 7: Generate three GEN-3 buildings, inspect views, and submit final PR
