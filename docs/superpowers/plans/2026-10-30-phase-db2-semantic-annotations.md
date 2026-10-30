@@ -127,7 +127,7 @@
 - [x] Run Windows Python 3.12 full suite, MCP protocol test, `pip check`, wheel content check, and `git diff --check`.
 - [x] Commit source/docs only; do not add `Template/` or user workspace files.
 - [x] Request final read-only code review and resolve actionable findings: source hashes are rechecked when reviewing style reports; empty Regions are preserved; overlapping Region occupancy is counted consistently; populated DB-1 migration coverage is added.
-- [ ] Push a DB-2 branch and open a review PR; do not merge.
+- [x] Publish the DB-2 branch and open [PR #4](https://github.com/songgagav/MC-Architect-Agent/pull/4) against `phase-db1-reference-library`; leave it open for review and do not merge.
 
 ## Completion Gate
 
