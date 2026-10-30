@@ -29,9 +29,9 @@
 ## Review Focus
 
 - **Primary entrance identity and placement:** duplicate/missing IDs, multiple front doors, or moving the primary entry must preserve exactly one `front` anchor at the selected opening. Pin with adapter tests in Task 5.
-- **Face coordinate and segment interpretation:** left/right use actual side-post segments, not `bay_count`; pin all four face normals and side segment placement in Task 3.
+- **Face coordinate and segment interpretation:** left/right use actual side-post segments, not `bay_count`; pin all four face normals and side segment placement in Task 2.
 - **Ownership and clearances:** thick walls, frames, trim, roof, posts, passage, and connector clearances must not overwrite one another. Pin declared replacements and undeclared conflicts in Tasks 3–5.
-- **State transforms:** lattice/window states must rotate and mirror without silently losing facing/axis/half/shape. Pin supported and rejected states in Task 4.
+- **State transforms:** lattice/window states must rotate and mirror without silently losing facing/axis/half/shape. Pin supported and rejected states in Tasks 3 and 4.
 - **Old project and explicit-input compatibility:** legacy door/material values, v3 asset records, JSON snapshots, project history, and default hashes must remain stable. Pin in Tasks 0, 2, 5, and 6.
 
 ---
@@ -173,19 +173,19 @@
 - Create: `tests/test_facade_components.py`
 
 **Interfaces:**
-- Define `generate_facade_door(origin, profile, face, ownership, opening_mask) -> VoxelModel`.
-- Define `generate_facade_window(origin, profile, face, ownership, opening_mask) -> VoxelModel`.
+- Define `generate_facade_door(origin, profile, face, ownership, opening_mask, *, opening_id, materials) -> VoxelModel`.
+- Define `generate_facade_window(origin, profile, face, ownership, opening_mask, *, opening_id, materials) -> VoxelModel`.
 - Support 1-block single doors and 2-block paired doors, frame/lintel roles, plain windows, discrete lattice windows, and a small decorative pattern set.
 
-- [ ] **Write failing component tests first**
+- [x] **Write failing component tests first**
   - Test single/double door geometry, lower/upper/hinge/facing states, frame thickness, lintel, and four face orientations.
   - Test plain/lattice/decorative window sizes, frames, material roles, and opening mask.
   - Test rotated/mirrored lattice and door states produce correct states; unsupported properties raise.
   - Test frames and grille blocks cannot occupy reserved clear opening cells or replace structural ownership.
-- [ ] Run focused tests and confirm they fail.
-- [ ] Implement profile-based door/window components by reusing existing state parsing and block generators where compatible.
-- [ ] Run `pytest tests\test_facade_components.py tests\test_assembly_transforms.py -q`; confirm pass.
-- [ ] Commit the door/window components: `feat: add profiled doors and windows`.
+- [x] Run focused tests and confirm they fail.
+- [x] Implement profile-based door/window components by reusing existing state parsing and block generators where compatible.
+- [x] Run `pytest tests\test_facade_components.py tests\test_facade_profiles.py tests\test_assembly_transforms.py -q`; confirm pass.
+- [x] Commit the door/window components: `feat: add profiled doors and windows`.
 
 ### Task 4: Integrate profiles with hall/corridor and stable anchors
 

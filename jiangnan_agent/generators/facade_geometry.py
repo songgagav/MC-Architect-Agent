@@ -358,16 +358,21 @@ class BlockOwnershipMap:
     ) -> None:
         if not isinstance(model, VoxelModel):
             raise ValueError("model must be a VoxelModel")
+        claims = []
+        for position in sorted(model.blocks):
+            options: dict[str, object] = {"protected": protected, "opening_id": opening_id}
+            if replaces is not None and self.owner_at(position) is not None:
+                options["replaces"] = replaces
+            claims.append((position, owner, options))
+        self.claim_batch(claims)
+
+    def claim_batch(self, claims: Iterable[tuple[Position, str, Mapping[str, object]]]) -> None:
+        """Apply mixed ownership claims atomically, restoring claims on conflict."""
+
         previous = dict(self._claims)
         try:
-            for position in sorted(model.blocks):
-                self.claim(
-                    position,
-                    owner,
-                    protected=protected,
-                    opening_id=opening_id,
-                    replaces=replaces,
-                )
+            for position, owner, options in claims:
+                self.claim(position, owner, **options)  # type: ignore[arg-type]
         except Exception:
             self._claims = previous
             raise

@@ -101,6 +101,7 @@ class DoorProfile:
     width: int = 2
     height: int = 2
     frame_thickness: int = 0
+    door_material_role: str = "door"
     frame_material_role: str = "column"
     lintel_material_role: str = "beam"
     lintel: bool = True
@@ -120,6 +121,7 @@ class DoorProfile:
         object.__setattr__(self, "width", width)
         object.__setattr__(self, "height", height)
         object.__setattr__(self, "frame_thickness", thickness)
+        object.__setattr__(self, "door_material_role", _role(self.door_material_role, "door_material_role"))
         object.__setattr__(self, "frame_material_role", _role(self.frame_material_role, "frame_material_role"))
         object.__setattr__(self, "lintel_material_role", _role(self.lintel_material_role, "lintel_material_role"))
 
@@ -277,6 +279,7 @@ def door_profile_to_mapping(profile: DoorProfile) -> dict[str, object]:
         "width": profile.width,
         "height": profile.height,
         "frame_thickness": profile.frame_thickness,
+        "door_material_role": profile.door_material_role,
         "frame_material_role": profile.frame_material_role,
         "lintel_material_role": profile.lintel_material_role,
         "lintel": profile.lintel,
@@ -287,7 +290,15 @@ def door_profile_from_mapping(value: object) -> DoorProfile:
     config = _profile_mapping(
         value,
         "door",
-        {"width", "height", "frame_thickness", "frame_material_role", "lintel_material_role", "lintel"},
+        {
+            "width",
+            "height",
+            "frame_thickness",
+            "door_material_role",
+            "frame_material_role",
+            "lintel_material_role",
+            "lintel",
+        },
     )
     return DoorProfile(**config)  # type: ignore[arg-type]
 
@@ -358,7 +369,11 @@ def facade_profile_to_mapping(profile: FacadeProfile) -> dict[str, object]:
 
 
 def facade_profile_from_mapping(value: object) -> FacadeProfile:
-    config = _profile_mapping(value, "facade_profile", {"profile_id", "version", "wall", "door", "window", "timber", "openings", "materials"})
+    config = _profile_mapping(
+        value,
+        "facade_profile",
+        {"profile_id", "version", "wall", "door", "window", "timber", "openings", "materials"},
+    )
     if "profile_id" not in config:
         raise ValueError("facade_profile is missing required field 'profile_id'")
     openings = config.get("openings", ())
