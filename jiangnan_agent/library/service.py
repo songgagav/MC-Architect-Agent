@@ -12,9 +12,19 @@ from typing import Any
 
 from ..knowledge import KnowledgeBase, load_knowledge_base
 from .database import LibraryDatabase
-from .errors import AssetIntegrityError, LibraryLookupError
+from .errors import AssetIntegrityError, LibraryLookupError, LitematicFormatError
 from .litematic import PARSER_VERSION, TARGET_MINECRAFT_DATA_VERSION, analyze_litematic, read_litematic
-from .models import ReferenceAsset
+from .models import (
+    ComponentSummary,
+    LitematicDocument,
+    LitematicRegion,
+    ReferenceAsset,
+    ReferenceComponent,
+    SEMANTIC_COMPONENT_TYPES,
+    SemanticAnnotation,
+    StyleAnalysis,
+)
+from .semantics import normalize_annotation_geometry, summarize_annotation
 
 DEFAULT_DATABASE_PATH = Path("workspace/library/architect_library.sqlite3")
 _PACKAGE_ROOT = Path(__file__).resolve().parents[2]
@@ -713,6 +723,819 @@ class LibraryService:
                 raise LibraryLookupError(f"unknown reference asset: {asset_id!r}")
             return _asset_from_row(row)
 
+    def propose_annotations(
+        self, asset_id: str, version: int | None = None
+    ) -> tuple[SemanticAnnotation, ...]:
+        """Create deterministic, candidate-only suggestions from explicit block identities."""
+        from .annotation_rules import propose_region_annotations
+        from .semantics import encode_x_runs
+
+        asset_row = self._asset_file_row_for_reference(asset_id, version)
+        asset_version = int(asset_row["version"])
+        document, _source_path = self._read_verified_document(asset_id, asset_version)
+        proposed: list[SemanticAnnotation] = []
+        for region in document.regions:
+            for proposal in propose_region_annotations(region):
+                runs = encode_x_runs(proposal.positions)
+                geometry = {"runs": [list(run) for run in runs]}
+                identity = _json([asset_id, asset_version, region.name, proposal.rule_id, geometry])
+                annotation_id = "rule." + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24]
+                with self.database.connection() as connection:
+                    existing = connection.execute(
+                        "SELECT * FROM semantic_annotation_revisions WHERE annotation_id = ? ORDER BY revision DESC LIMIT 1",
+                        (annotation_id,),
+                    ).fetchone()
+                if existing is not None:
+                    proposed.append(_annotation_from_row(existing))
+                    continue
+                proposed.append(
+                    self._append_annotation(
+                        annotation_id=annotation_id,
+                        asset_id=asset_id,
+                        asset_version=asset_version,
+                        region_name=region.name,
+                        component_type=proposal.component_type,
+                        geometry_type="block_set",
+                        geometry=geometry,
+                        source_kind="rule",
+                        rule_id=proposal.rule_id,
+                        confidence=proposal.confidence,
+                        status="candidate",
+                        reviewer=None,
+                        reviewed_at=None,
+                        review_note=None,
+                        explanation=proposal.explanation,
+                        expected_revision=0,
+                    )
+                )
+        return tuple(proposed)
+
+    def create_annotation(
+        self,
+        *,
+        annotation_id: str,
+        asset_id: str,
+        region_name: str,
+        component_type: str,
+        geometry_type: str,
+        geometry: Mapping[str, object],
+        version: int | None = None,
+        confidence: float | None = None,
+    ) -> SemanticAnnotation:
+        annotation_id = _nonempty(annotation_id, "annotation_id")
+        asset_row = self._asset_file_row_for_reference(asset_id, version)
+        asset_version = int(asset_row["version"])
+        document, _source_path = self._read_verified_document(asset_id, asset_version)
+        region = _find_region(document.regions, region_name)
+        canonical = normalize_annotation_geometry(region, geometry_type, geometry)
+        if component_type not in SEMANTIC_COMPONENT_TYPES:
+            raise ValueError(f"unsupported semantic component type: {component_type!r}")
+        summarize_annotation(region, component_type, geometry_type, canonical)
+        if confidence is not None and (
+            isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1
+        ):
+            raise ValueError("confidence must be between 0 and 1")
+        with self.database.connection() as connection:
+            existing = connection.execute(
+                "SELECT 1 FROM semantic_annotation_revisions WHERE annotation_id = ? LIMIT 1", (annotation_id,)
+            ).fetchone()
+        if existing is not None:
+            raise ValueError(f"annotation ID already exists: {annotation_id!r}")
+        return self._append_annotation(
+            annotation_id=annotation_id,
+            asset_id=asset_id,
+            asset_version=asset_version,
+            region_name=region_name,
+            component_type=component_type,
+            geometry_type=geometry_type,
+            geometry=canonical,
+            source_kind="manual",
+            rule_id=None,
+            confidence=confidence,
+            status="candidate",
+            reviewer=None,
+            reviewed_at=None,
+            review_note=None,
+            expected_revision=0,
+        )
+
+    def update_annotation(
+        self,
+        annotation_id: str,
+        *,
+        component_type: str | None = None,
+        geometry_type: str | None = None,
+        geometry: Mapping[str, object] | None = None,
+        confidence: float | None = None,
+        review_note: str | None = None,
+    ) -> SemanticAnnotation:
+        current = self.get_annotation(annotation_id)
+        document, _source_path = self._read_verified_document(current.asset_id, current.asset_version)
+        region = _find_region(document.regions, current.region_name)
+        new_type = component_type if component_type is not None else current.component_type
+        new_geometry_type = geometry_type if geometry_type is not None else current.geometry_type
+        raw_geometry = dict(geometry) if geometry is not None else dict(current.geometry)
+        canonical = normalize_annotation_geometry(region, new_geometry_type, raw_geometry)
+        if new_type not in SEMANTIC_COMPONENT_TYPES:
+            raise ValueError(f"unsupported semantic component type: {new_type!r}")
+        summarize_annotation(region, new_type, new_geometry_type, canonical)
+        if confidence is not None and (
+            isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1
+        ):
+            raise ValueError("confidence must be between 0 and 1")
+        return self._append_annotation(
+            annotation_id=current.annotation_id,
+            asset_id=current.asset_id,
+            asset_version=current.asset_version,
+            region_name=current.region_name,
+            component_type=new_type,
+            geometry_type=new_geometry_type,
+            geometry=canonical,
+            source_kind="manual",
+            rule_id=None,
+            confidence=confidence,
+            status="candidate",
+            reviewer=None,
+            reviewed_at=None,
+            review_note=review_note,
+            expected_revision=current.revision,
+        )
+
+    def review_annotation(
+        self,
+        annotation_id: str,
+        *,
+        reviewer: str,
+        decision: str,
+        note: str | None = None,
+    ) -> SemanticAnnotation:
+        current = self.get_annotation(annotation_id)
+        if decision not in {"verified", "rejected"}:
+            raise ValueError("review decision must be 'verified' or 'rejected'")
+        reviewer = _nonempty(reviewer, "reviewer")
+        self.analyze_annotation(current.annotation_id, current.revision)
+        return self._append_annotation(
+            annotation_id=current.annotation_id,
+            asset_id=current.asset_id,
+            asset_version=current.asset_version,
+            region_name=current.region_name,
+            component_type=current.component_type,
+            geometry_type=current.geometry_type,
+            geometry=dict(current.geometry),
+            source_kind=current.source_kind,
+            rule_id=current.rule_id,
+            confidence=current.confidence,
+            status=decision,
+            reviewer=reviewer,
+            reviewed_at=_utc_now(),
+            review_note=note,
+            expected_revision=current.revision,
+        )
+
+    def list_annotations(
+        self,
+        *,
+        asset_id: str | None = None,
+        version: int | None = None,
+        component_type: str | None = None,
+        status: str | None = None,
+        annotation_id: str | None = None,
+        include_history: bool = False,
+    ) -> tuple[SemanticAnnotation, ...]:
+        clauses: list[str] = []
+        parameters: list[object] = []
+        if not include_history:
+            clauses.append("(a.annotation_id, a.revision) IN (SELECT annotation_id, MAX(revision) FROM semantic_annotation_revisions GROUP BY annotation_id)")
+        for column, value in (("asset_id", asset_id), ("asset_version", version), ("component_type", component_type), ("status", status), ("annotation_id", annotation_id)):
+            if value is not None:
+                clauses.append(f"a.{column} = ?")
+                parameters.append(value)
+        query = "SELECT a.* FROM semantic_annotation_revisions a"
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY a.asset_id, a.asset_version, a.region_name, a.annotation_id, a.revision"
+        with self.database.connection() as connection:
+            rows = connection.execute(query, parameters).fetchall()
+        return tuple(_annotation_from_row(row) for row in rows)
+
+    def get_annotation(self, annotation_id: str, revision: int | None = None) -> SemanticAnnotation:
+        with self.database.connection() as connection:
+            if revision is None:
+                row = connection.execute(
+                    "SELECT * FROM semantic_annotation_revisions WHERE annotation_id = ? ORDER BY revision DESC LIMIT 1",
+                    (annotation_id,),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    "SELECT * FROM semantic_annotation_revisions WHERE annotation_id = ? AND revision = ?",
+                    (annotation_id, revision),
+                ).fetchone()
+        if row is None:
+            raise LibraryLookupError(f"unknown semantic annotation: {annotation_id!r}")
+        return _annotation_from_row(row)
+
+    def analyze_annotation(self, annotation_id: str, revision: int | None = None) -> ComponentSummary:
+        annotation = self.get_annotation(annotation_id, revision)
+        document, _source_path = self._read_verified_document(annotation.asset_id, annotation.asset_version)
+        region = _find_region(document.regions, annotation.region_name)
+        return summarize_annotation(region, annotation.component_type, annotation.geometry_type, annotation.geometry)
+
+    def register_reference_component(
+        self,
+        annotation_id: str,
+        *,
+        name: str,
+        style_tags: Sequence[str] = (),
+        parameterization_status: str = "not_parameterized",
+        revision: int | None = None,
+    ) -> ReferenceComponent:
+        annotation = self.get_annotation(annotation_id, revision)
+        if annotation.status != "verified":
+            raise ValueError("reference components can only be registered from a verified annotation")
+        if parameterization_status not in {"not_parameterized", "planned"}:
+            raise ValueError("reference components cannot be marked as implemented parameterized generators")
+        component_name = _nonempty(name, "name")
+        tags = _string_list(list(style_tags), "style_tags")
+        with self.database.connection() as connection:
+            existing = connection.execute(
+                "SELECT * FROM reference_components WHERE annotation_id = ? AND annotation_revision = ?",
+                (annotation.annotation_id, annotation.revision),
+            ).fetchone()
+        if existing is not None:
+            component = _component_from_row(existing)
+            if component.name != component_name or component.style_tags != tuple(tags):
+                raise ValueError("a registered component version is immutable; create a new annotation revision")
+            return component
+        summary = self.analyze_annotation(annotation.annotation_id, annotation.revision)
+        component_id = "reference-component." + hashlib.sha256(annotation_id.encode("utf-8")).hexdigest()[:20]
+        with self.database.transaction() as connection:
+            version_row = connection.execute(
+                "SELECT MAX(version) FROM reference_components WHERE component_id = ?", (component_id,)
+            ).fetchone()
+            component_version = 1 if version_row[0] is None else int(version_row[0]) + 1
+            now = _utc_now()
+            record = _component_record(
+                component_id=component_id,
+                version=component_version,
+                annotation=annotation,
+                summary=summary,
+                name=component_name,
+                style_tags=tags,
+                parameterization_status=parameterization_status,
+                created_at=now,
+            )
+            connection.execute(
+                """INSERT INTO reference_components(
+                       component_id, version, source_asset_id, source_asset_version, annotation_id,
+                       annotation_revision, name, component_type, region_name, origin_json,
+                       dimensions_json, bounding_box_json, block_count, block_states_json,
+                       materials_json, layer_materials_json, coordinate_runs_json, style_tags_json,
+                       component_status, parameterization_status, created_at, record_json
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    record["component_id"], record["version"], record["source_asset_id"],
+                    record["source_asset_version"], record["annotation_id"], record["annotation_revision"],
+                    record["name"], record["component_type"], record["region_name"], _json(record["local_origin"]),
+                    _json(record["dimensions"]), _json(record["bounding_box"]), record["block_count"],
+                    _json(record["block_states"]), _json(record["materials"]), _json(record["layer_materials"]),
+                    _json(record["coordinate_runs"]), _json(record["style_tags"]), record["component_status"],
+                    record["parameterization_status"], now, _json(record),
+                ),
+            )
+            saved = connection.execute(
+                "SELECT * FROM reference_components WHERE component_id = ? AND version = ?",
+                (component_id, component_version),
+            ).fetchone()
+        return _component_from_row(saved)
+
+    def list_reference_components(
+        self, *, source_asset_id: str | None = None, component_type: str | None = None
+    ) -> tuple[ReferenceComponent, ...]:
+        clauses: list[str] = []
+        values: list[object] = []
+        if source_asset_id is not None:
+            clauses.append("source_asset_id = ?")
+            values.append(source_asset_id)
+        if component_type is not None:
+            clauses.append("component_type = ?")
+            values.append(component_type)
+        query = "SELECT * FROM reference_components"
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY source_asset_id, source_asset_version, component_type, component_id, version"
+        with self.database.connection() as connection:
+            rows = connection.execute(query, values).fetchall()
+        return tuple(_component_from_row(row) for row in rows)
+
+    def get_reference_component(self, component_id: str, version: int | None = None) -> ReferenceComponent:
+        with self.database.connection() as connection:
+            if version is None:
+                row = connection.execute(
+                    "SELECT * FROM reference_components WHERE component_id = ? ORDER BY version DESC LIMIT 1",
+                    (component_id,),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    "SELECT * FROM reference_components WHERE component_id = ? AND version = ?",
+                    (component_id, version),
+                ).fetchone()
+        if row is None:
+            raise LibraryLookupError(f"unknown reference component: {component_id!r}")
+        return _component_from_row(row)
+
+    def export_component_report(
+        self, component_id: str, destination: str | Path, version: int | None = None
+    ) -> Path:
+        from .reports import export_json_no_overwrite
+
+        component = self.get_reference_component(component_id, version)
+        annotation = self.get_annotation(component.annotation_id, component.annotation_revision)
+        source = self.get_reference(component.source_asset_id, component.source_asset_version)
+        document = {
+            "report_type": "verified_reference_component",
+            "report_version": 1,
+            "component": _component_record(
+                component_id=component.component_id,
+                version=component.version,
+                annotation=annotation,
+                summary=self.analyze_annotation(annotation.annotation_id, annotation.revision),
+                name=component.name,
+                style_tags=component.style_tags,
+                parameterization_status=component.parameterization_status,
+                created_at=component.created_at,
+            ),
+            "source": {
+                "asset_id": source.asset_id,
+                "asset_version": source.version,
+                "file": source.source_file,
+                "sha256": source.sha256,
+                "minecraft_data_version": source.minecraft_data_version,
+                "region_assignment_status": source.region_assignment_status,
+            },
+            "review": {
+                "annotation_id": annotation.annotation_id,
+                "annotation_revision": annotation.revision,
+                "reviewer": annotation.reviewer,
+                "reviewed_at": annotation.reviewed_at,
+                "note": annotation.review_note,
+            },
+            "usage_rights": dict(source.usage_rights),
+            "limitations": [
+                "This is a static Minecraft reference component, not a parameterized generator.",
+                "The reference region and historical provenance remain unverified unless explicitly sourced.",
+            ],
+        }
+        path = Path(destination)
+        if not path.is_absolute():
+            path = self.project_root / path
+        try:
+            return export_json_no_overwrite(document, path)
+        except FileExistsError:
+            raise
+        except OSError as exc:
+            raise AssetIntegrityError(f"could not export component report to {path}: {exc}") from exc
+
+    def create_style_analysis(
+        self,
+        profile_id: str,
+        *,
+        profile_version: int | None = None,
+        source_assets: Sequence[tuple[str, int]] | None = None,
+        analysis_id: str | None = None,
+    ) -> StyleAnalysis:
+        with self.database.connection() as connection:
+            if profile_version is None:
+                profile = connection.execute(
+                    "SELECT * FROM style_profiles WHERE profile_id = ? ORDER BY version DESC LIMIT 1", (profile_id,)
+                ).fetchone()
+            else:
+                profile = connection.execute(
+                    "SELECT * FROM style_profiles WHERE profile_id = ? AND version = ?",
+                    (profile_id, profile_version),
+                ).fetchone()
+            if profile is None:
+                raise LibraryLookupError(f"unknown style profile: {profile_id!r}")
+            pinned_rows = connection.execute(
+                """SELECT asset_id, asset_version FROM style_reference_assets
+                   WHERE profile_id = ? AND profile_version = ? ORDER BY asset_id, asset_version""",
+                (profile_id, int(profile["version"])),
+            ).fetchall()
+        pinned_sources = tuple((str(row["asset_id"]), int(row["asset_version"])) for row in pinned_rows)
+        if source_assets is None:
+            selected_sources = pinned_sources
+        else:
+            selected_sources = tuple(sorted((str(asset_id), _positive_int(version, "source asset version")) for asset_id, version in source_assets))
+            if len(set(selected_sources)) != len(selected_sources):
+                raise ValueError("style analysis source assets must be unique")
+            missing = sorted(set(selected_sources) - set(pinned_sources))
+            if missing:
+                raise LibraryLookupError(
+                    f"style profile {profile_id!r}@{profile['version']} does not pin requested source(s): {missing}"
+                )
+        if not selected_sources:
+            raise LibraryLookupError(
+                f"style profile {profile_id!r}@{profile['version']} has no imported, version-pinned reference assets"
+            )
+
+        asset_reports: list[dict[str, Any]] = []
+        for source_asset_id, source_asset_version in selected_sources:
+            document, _path = self._read_verified_document(source_asset_id, source_asset_version)
+            asset = self.get_reference(source_asset_id, source_asset_version)
+            analysis = analyze_litematic(document)
+            states_by_material: dict[str, int] = {}
+            for state_key, count in analysis.palette_counts.items():
+                material = state_key.split("[", 1)[0]
+                states_by_material[material] = states_by_material.get(material, 0) + count
+            regions: list[dict[str, Any]] = []
+            for region in document.regions:
+                region_document = LitematicDocument(
+                    schematic_version=document.schematic_version,
+                    minecraft_data_version=document.minecraft_data_version,
+                    name=document.name,
+                    author=document.author,
+                    regions=(region,),
+                    source_metadata=document.source_metadata,
+                )
+                try:
+                    region_analysis = analyze_litematic(region_document)
+                except LitematicFormatError as exc:
+                    if str(exc) != "Litematic contains no occupied non-air block positions":
+                        raise
+                    regions.append(
+                        {
+                            "region_name": region.name,
+                            "signed_size": list(region.signed_size),
+                            "dimensions": list(region.size),
+                            "bounding_box": None,
+                            "block_count": 0,
+                            "layer_profile": {},
+                            "block_palette": {},
+                        }
+                    )
+                    continue
+                regions.append(
+                    {
+                        "region_name": region.name,
+                        "signed_size": list(region.signed_size),
+                        "dimensions": list(region_analysis.dimensions),
+                        "bounding_box": [list(region_analysis.bounding_box[0]), list(region_analysis.bounding_box[1])],
+                        "block_count": region_analysis.block_count,
+                        "layer_profile": {
+                            str(y): dict(states) for y, states in region_analysis.layer_material_counts.items()
+                        },
+                        "block_palette": dict(region_analysis.palette_counts),
+                    }
+                )
+
+            annotations = self.list_annotations(asset_id=source_asset_id, version=source_asset_version)
+            verified: list[dict[str, Any]] = []
+            candidates: list[dict[str, Any]] = []
+            rejected: list[dict[str, Any]] = []
+            covered: set[tuple[str, int, int, int]] = set()
+            for annotation in annotations:
+                base = {
+                    "annotation_id": annotation.annotation_id,
+                    "revision": annotation.revision,
+                    "region_name": annotation.region_name,
+                    "component_type": annotation.component_type,
+                    "source_kind": annotation.source_kind,
+                    "rule_id": annotation.rule_id,
+                    "confidence": annotation.confidence,
+                    "geometry_type": annotation.geometry_type,
+                    "geometry": dict(annotation.geometry),
+                    "reviewer": annotation.reviewer,
+                    "review_note": annotation.review_note,
+                }
+                if annotation.status == "verified":
+                    summary = self.analyze_annotation(annotation.annotation_id, annotation.revision)
+                    summary_json = _summary_record(summary)
+                    verified.append({**base, "summary": summary_json})
+                    for run in summary.coordinate_runs:
+                        y, z, x_start, x_end = run
+                        origin = summary.local_origin
+                        covered.update(
+                            (summary.region_name, origin[0] + x, origin[1] + y, origin[2] + z)
+                            for x in range(x_start, x_end)
+                        )
+                elif annotation.status == "candidate":
+                    candidates.append(base)
+                elif annotation.status == "rejected":
+                    rejected.append(base)
+
+            occupied: set[tuple[str, int, int, int]] = {
+                (region.name, *position)
+                for region in document.regions
+                for position, _state in region.iter_non_air_blocks()
+            }
+            assets_counted = len(occupied)
+            proportions = {
+                "width_to_height": round(analysis.dimensions[0] / analysis.dimensions[1], 6),
+                "depth_to_height": round(analysis.dimensions[2] / analysis.dimensions[1], 6),
+                "basis": "measured Minecraft block extents; creative scale convention is 1 block approximately 1 meter",
+            }
+            asset_reports.append(
+                {
+                    "asset_id": asset.asset_id,
+                    "asset_version": asset.version,
+                    "name": asset.name,
+                    "sha256": asset.sha256,
+                    "minecraft_data_version": asset.minecraft_data_version,
+                    "region_profile_id": asset.region_profile_id,
+                    "regional_attribution": "unverified" if asset.region_profile_id is None else asset.region_assignment_status,
+                    "measurement_status": "measured",
+                    "dimensions": list(analysis.dimensions),
+                    "bounding_box": [list(analysis.bounding_box[0]), list(analysis.bounding_box[1])],
+                    "block_count": analysis.block_count,
+                    "proportions": proportions,
+                    "materials": dict(sorted(states_by_material.items())),
+                    "block_states": dict(analysis.palette_counts),
+                    "regions": regions,
+                    "annotations": {
+                        "verified": verified,
+                        "candidates": candidates,
+                        "rejected": rejected,
+                        "unclassified_occupied_blocks": max(0, assets_counted - len(covered)),
+                        "unclassified_count_basis": (
+                            "occupied blocks not covered by current verified annotations, counted per Region and coordinate"
+                        ),
+                    },
+                }
+            )
+        report = {
+            "schema": "minecraft-style-analysis/v1",
+            "profile": {"profile_id": profile_id, "version": int(profile["version"])},
+            "classification": "minecraft_visual_style",
+            "regional_attribution": "unverified",
+            "historical_standard_claim": "none",
+            "scale_convention": {"meters_per_block": 1.0, "status": "creative_design_convention"},
+            "assets": asset_reports,
+            "style_features": {
+                "building_outline": "measured from occupied block bounds",
+                "roof_shape_and_layers": "unverified until reviewed semantic annotations exist",
+                "palette_and_color": "measured Minecraft block identities; visual color grouping remains a design interpretation",
+                "wall_and_timber_relationship": "unverified until reviewed semantic annotations exist",
+                "ornament_density": "unverified until decoration regions are manually annotated",
+                "construction_relationships": "unknown unless supported by verified annotations",
+            },
+            "limitations": [
+                "The sources are Minecraft creative references; no regional or historical provenance is inferred.",
+                "The original Minecraft DataVersion is recorded as source metadata; no version conversion was performed.",
+                "Candidate annotations are excluded from verified component measurements.",
+            ],
+        }
+        if analysis_id is None:
+            identity = _json([profile_id, int(profile["version"]), selected_sources])
+            analysis_id = "style-analysis." + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24]
+        else:
+            analysis_id = _nonempty(analysis_id, "analysis_id")
+
+        report_json = _json(report)
+        with self.database.connection() as connection:
+            latest = connection.execute(
+                "SELECT * FROM style_analysis_revisions WHERE analysis_id = ? ORDER BY revision DESC LIMIT 1",
+                (analysis_id,),
+            ).fetchone()
+        if latest is not None and latest["analysis_json"] == report_json:
+            return self.get_style_analysis(analysis_id, int(latest["revision"]))
+        with self.database.transaction() as connection:
+            latest_revision = connection.execute(
+                "SELECT MAX(revision) FROM style_analysis_revisions WHERE analysis_id = ?", (analysis_id,)
+            ).fetchone()[0]
+            revision = 1 if latest_revision is None else int(latest_revision) + 1
+            now = _utc_now()
+            record = {
+                "analysis_id": analysis_id, "revision": revision, "profile_id": profile_id,
+                "profile_version": int(profile["version"]), "status": "candidate", "analysis": report,
+                "reviewer": None, "reviewed_at": None, "review_note": None, "created_at": now,
+            }
+            connection.execute(
+                """INSERT INTO style_analysis_revisions(
+                       analysis_id, revision, profile_id, profile_version, status, analysis_json,
+                       reviewer, reviewed_at, review_note, created_at, record_json
+                   ) VALUES (?, ?, ?, ?, 'candidate', ?, NULL, NULL, NULL, ?, ?)""",
+                (analysis_id, revision, profile_id, int(profile["version"]), report_json, now, _json(record)),
+            )
+            for source_asset_id, source_asset_version in selected_sources:
+                connection.execute(
+                    """INSERT INTO style_analysis_sources(
+                           analysis_id, analysis_revision, asset_id, asset_version, source_role
+                       ) VALUES (?, ?, ?, ?, 'visual_reference')""",
+                    (analysis_id, revision, source_asset_id, source_asset_version),
+                )
+        return self.get_style_analysis(analysis_id, revision)
+
+    def list_style_analyses(
+        self, *, profile_id: str | None = None, status: str | None = None, include_history: bool = False
+    ) -> tuple[StyleAnalysis, ...]:
+        clauses: list[str] = []
+        values: list[object] = []
+        if not include_history:
+            clauses.append("(a.analysis_id, a.revision) IN (SELECT analysis_id, MAX(revision) FROM style_analysis_revisions GROUP BY analysis_id)")
+        if profile_id is not None:
+            clauses.append("a.profile_id = ?")
+            values.append(profile_id)
+        if status is not None:
+            clauses.append("a.status = ?")
+            values.append(status)
+        query = "SELECT a.* FROM style_analysis_revisions a"
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY a.profile_id, a.analysis_id, a.revision"
+        with self.database.connection() as connection:
+            rows = connection.execute(query, values).fetchall()
+        return tuple(self._style_analysis_from_row(row) for row in rows)
+
+    def get_style_analysis(self, analysis_id: str, revision: int | None = None) -> StyleAnalysis:
+        with self.database.connection() as connection:
+            if revision is None:
+                row = connection.execute(
+                    "SELECT * FROM style_analysis_revisions WHERE analysis_id = ? ORDER BY revision DESC LIMIT 1",
+                    (analysis_id,),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    "SELECT * FROM style_analysis_revisions WHERE analysis_id = ? AND revision = ?",
+                    (analysis_id, revision),
+                ).fetchone()
+            if row is None:
+                raise LibraryLookupError(f"unknown style analysis: {analysis_id!r}")
+            sources = connection.execute(
+                """SELECT asset_id, asset_version FROM style_analysis_sources
+                   WHERE analysis_id = ? AND analysis_revision = ? ORDER BY asset_id, asset_version""",
+                (analysis_id, int(row["revision"])),
+            ).fetchall()
+        return self._style_analysis_from_row(row, tuple((str(item["asset_id"]), int(item["asset_version"])) for item in sources))
+
+    def review_style_analysis(
+        self, analysis_id: str, *, reviewer: str, decision: str, note: str | None = None
+    ) -> StyleAnalysis:
+        current = self.get_style_analysis(analysis_id)
+        if decision not in {"verified", "rejected"}:
+            raise ValueError("review decision must be 'verified' or 'rejected'")
+        reviewer = _nonempty(reviewer, "reviewer")
+        for asset_id, asset_version in current.source_assets:
+            self._read_verified_document(asset_id, asset_version)
+        with self.database.transaction() as connection:
+            latest = connection.execute(
+                "SELECT MAX(revision) FROM style_analysis_revisions WHERE analysis_id = ?", (analysis_id,)
+            ).fetchone()[0]
+            if latest != current.revision:
+                raise ValueError(
+                    f"style analysis {analysis_id!r} changed while being reviewed; reload it before deciding"
+                )
+            revision = int(latest) + 1
+            now = _utc_now()
+            record = {
+                "analysis_id": current.analysis_id, "revision": revision, "profile_id": current.profile_id,
+                "profile_version": current.profile_version, "status": decision, "analysis": dict(current.analysis),
+                "reviewer": reviewer, "reviewed_at": now, "review_note": note, "created_at": now,
+            }
+            connection.execute(
+                """INSERT INTO style_analysis_revisions(
+                       analysis_id, revision, profile_id, profile_version, status, analysis_json,
+                       reviewer, reviewed_at, review_note, created_at, record_json
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    analysis_id, revision, current.profile_id, current.profile_version, decision,
+                    _json(dict(current.analysis)), reviewer, now, note, now, _json(record),
+                ),
+            )
+            for asset_id, asset_version in current.source_assets:
+                connection.execute(
+                    """INSERT INTO style_analysis_sources(
+                           analysis_id, analysis_revision, asset_id, asset_version, source_role
+                       ) VALUES (?, ?, ?, ?, 'visual_reference')""",
+                    (analysis_id, revision, asset_id, asset_version),
+                )
+        return self.get_style_analysis(analysis_id, revision)
+
+    def export_style_analysis(self, analysis_id: str, destination: str | Path) -> Path:
+        from .reports import export_json_no_overwrite, style_analysis_document
+
+        report = self.get_style_analysis(analysis_id)
+        path = Path(destination)
+        if not path.is_absolute():
+            path = self.project_root / path
+        try:
+            return export_json_no_overwrite(style_analysis_document(report), path)
+        except FileExistsError:
+            raise
+        except OSError as exc:
+            raise AssetIntegrityError(f"could not export style analysis to {path}: {exc}") from exc
+
+    def _style_analysis_from_row(
+        self, row: sqlite3.Row, sources: tuple[tuple[str, int], ...] | None = None
+    ) -> StyleAnalysis:
+        if sources is None:
+            with self.database.connection() as connection:
+                rows = connection.execute(
+                    """SELECT asset_id, asset_version FROM style_analysis_sources
+                       WHERE analysis_id = ? AND analysis_revision = ? ORDER BY asset_id, asset_version""",
+                    (row["analysis_id"], row["revision"]),
+                ).fetchall()
+            sources = tuple((str(item["asset_id"]), int(item["asset_version"])) for item in rows)
+        return StyleAnalysis(
+            analysis_id=str(row["analysis_id"]),
+            revision=int(row["revision"]),
+            profile_id=str(row["profile_id"]),
+            profile_version=int(row["profile_version"]),
+            status=str(row["status"]),
+            source_assets=sources,
+            analysis=_loads(row["analysis_json"]),
+            reviewer=row["reviewer"],
+            reviewed_at=row["reviewed_at"],
+            review_note=row["review_note"],
+            created_at=str(row["created_at"]),
+        )
+
+    def _append_annotation(
+        self,
+        *,
+        annotation_id: str,
+        asset_id: str,
+        asset_version: int,
+        region_name: str,
+        component_type: str,
+        geometry_type: str,
+        geometry: Mapping[str, object],
+        source_kind: str,
+        rule_id: str | None,
+        confidence: float | None,
+        status: str,
+        reviewer: str | None,
+        reviewed_at: str | None,
+        review_note: str | None,
+        explanation: str | None = None,
+        expected_revision: int | None = None,
+    ) -> SemanticAnnotation:
+        if status == "verified" and (not reviewer or not reviewed_at):
+            raise ValueError("verified annotations require a human reviewer and review time")
+        with self.database.transaction() as connection:
+            row = connection.execute(
+                "SELECT MAX(revision) FROM semantic_annotation_revisions WHERE annotation_id = ?", (annotation_id,)
+            ).fetchone()
+            latest_revision = 0 if row[0] is None else int(row[0])
+            if expected_revision is not None and latest_revision != expected_revision:
+                raise ValueError(
+                    f"annotation {annotation_id!r} changed from revision {expected_revision} to {latest_revision}; reload before editing"
+                )
+            revision = latest_revision + 1
+            created_at = _utc_now()
+            record = {
+                "annotation_id": annotation_id, "revision": revision, "asset_id": asset_id,
+                "asset_version": asset_version, "region_name": region_name, "component_type": component_type,
+                "geometry_type": geometry_type, "geometry": dict(geometry), "source_kind": source_kind,
+                "rule_id": rule_id, "confidence": confidence, "status": status, "reviewer": reviewer,
+                "reviewed_at": reviewed_at, "review_note": review_note, "created_at": created_at,
+            }
+            if explanation is not None:
+                record["rule_explanation"] = explanation
+            connection.execute(
+                """INSERT INTO semantic_annotation_revisions(
+                       annotation_id, revision, asset_id, asset_version, region_name, component_type,
+                       geometry_type, geometry_json, source_kind, rule_id, confidence, status,
+                       reviewer, reviewed_at, review_note, created_at, record_json
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    annotation_id, revision, asset_id, asset_version, region_name, component_type,
+                    geometry_type, _json(dict(geometry)), source_kind, rule_id, confidence, status,
+                    reviewer, reviewed_at, review_note, created_at, _json(record),
+                ),
+            )
+            saved = connection.execute(
+                "SELECT * FROM semantic_annotation_revisions WHERE annotation_id = ? AND revision = ?",
+                (annotation_id, revision),
+            ).fetchone()
+        return _annotation_from_row(saved)
+
+    def _asset_file_row_for_reference(self, asset_id: str, version: int | None) -> dict[str, object]:
+        with self.database.connection() as connection:
+            asset = self._asset_file_row(connection, asset_id, version)
+            file_row = connection.execute(
+                "SELECT sha256 FROM reference_files WHERE file_id = ?", (asset["file_id"],)
+            ).fetchone()
+        if file_row is None:
+            raise LibraryLookupError(f"reference asset has no source file record: {asset_id!r}")
+        return {"version": asset["version"], "source_file": asset["source_file"], "sha256": file_row["sha256"]}
+
+    def _read_verified_document(self, asset_id: str, version: int) -> tuple[LitematicDocument, Path]:
+        asset = self._asset_file_row_for_reference(asset_id, version)
+        path = self._resolve_source_path(str(asset["source_file"]))
+        if not path.is_file():
+            raise AssetIntegrityError(f"reference source file is missing: {path}")
+        expected = str(asset["sha256"])
+        before, byte_count = _sha256(path)
+        if before != expected:
+            raise AssetIntegrityError(f"SHA-256 mismatch for {asset_id}@{version}: expected {expected}, got {before}")
+        try:
+            document = read_litematic(path)
+        except ValueError as exc:
+            raise AssetIntegrityError(f"could not parse reference source {asset_id}@{version}: {exc}") from exc
+        after, after_size = _sha256(path)
+        if after != before or after_size != byte_count:
+            raise AssetIntegrityError(f"reference source changed while being analyzed: {path}")
+        return document, path
+
     def material_counts(self, asset_id: str, version: int | None = None) -> dict[str, int]:
         with self.database.connection() as connection:
             row = self._asset_file_row(connection, asset_id, version)
@@ -1189,6 +2012,116 @@ def _asset_from_row(row: sqlite3.Row) -> ReferenceAsset:
         created_at=str(row["created_at"]),
         parser_version=str(row["parser_version"]),
     )
+
+
+def _annotation_from_row(row: sqlite3.Row) -> SemanticAnnotation:
+    return SemanticAnnotation(
+        annotation_id=str(row["annotation_id"]),
+        revision=int(row["revision"]),
+        asset_id=str(row["asset_id"]),
+        asset_version=int(row["asset_version"]),
+        region_name=str(row["region_name"]),
+        component_type=str(row["component_type"]),
+        geometry_type=str(row["geometry_type"]),
+        geometry=_loads(row["geometry_json"]),
+        source_kind=str(row["source_kind"]),
+        rule_id=row["rule_id"],
+        confidence=row["confidence"],
+        status=str(row["status"]),
+        reviewer=row["reviewer"],
+        reviewed_at=row["reviewed_at"],
+        review_note=row["review_note"],
+        created_at=str(row["created_at"]),
+    )
+
+
+def _component_from_row(row: sqlite3.Row) -> ReferenceComponent:
+    bounds = _loads(row["bounding_box_json"])
+    return ReferenceComponent(
+        component_id=str(row["component_id"]),
+        version=int(row["version"]),
+        source_asset_id=str(row["source_asset_id"]),
+        source_asset_version=int(row["source_asset_version"]),
+        annotation_id=str(row["annotation_id"]),
+        annotation_revision=int(row["annotation_revision"]),
+        name=str(row["name"]),
+        component_type=str(row["component_type"]),
+        region_name=str(row["region_name"]),
+        local_origin=tuple(_loads(row["origin_json"])),  # type: ignore[arg-type]
+        dimensions=tuple(_loads(row["dimensions_json"])),  # type: ignore[arg-type]
+        bounding_box=(tuple(bounds[0]), tuple(bounds[1])),  # type: ignore[arg-type]
+        block_count=int(row["block_count"]),
+        block_states=_loads(row["block_states_json"]),
+        materials=_loads(row["materials_json"]),
+        layer_materials={int(key): value for key, value in _loads(row["layer_materials_json"]).items()},
+        coordinate_runs=tuple(tuple(run) for run in _loads(row["coordinate_runs_json"])),  # type: ignore[arg-type]
+        style_tags=tuple(_loads(row["style_tags_json"])),
+        component_status=str(row["component_status"]),
+        parameterization_status=str(row["parameterization_status"]),
+        created_at=str(row["created_at"]),
+    )
+
+
+def _component_record(
+    *,
+    component_id: str,
+    version: int,
+    annotation: SemanticAnnotation,
+    summary: ComponentSummary,
+    name: str,
+    style_tags: Sequence[str],
+    parameterization_status: str,
+    created_at: str,
+) -> dict[str, Any]:
+    return {
+        "component_id": component_id,
+        "version": version,
+        "source_asset_id": annotation.asset_id,
+        "source_asset_version": annotation.asset_version,
+        "annotation_id": annotation.annotation_id,
+        "annotation_revision": annotation.revision,
+        "name": name,
+        "component_type": summary.component_type,
+        "region_name": summary.region_name,
+        "local_origin": list(summary.local_origin),
+        "dimensions": list(summary.dimensions),
+        "bounding_box": [list(summary.bounding_box[0]), list(summary.bounding_box[1])],
+        "block_count": summary.block_count,
+        "block_states": dict(summary.block_states),
+        "materials": dict(summary.materials),
+        "layer_materials": {str(key): dict(value) for key, value in summary.layer_materials.items()},
+        "coordinate_runs": [list(run) for run in summary.coordinate_runs],
+        "style_tags": list(style_tags),
+        "component_status": "static_reference",
+        "parameterization_status": parameterization_status,
+        "created_at": created_at,
+        "source_annotation_status": annotation.status,
+        "reviewer": annotation.reviewer,
+        "reviewed_at": annotation.reviewed_at,
+        "review_note": annotation.review_note,
+    }
+
+
+def _summary_record(summary: ComponentSummary) -> dict[str, Any]:
+    return {
+        "region_name": summary.region_name,
+        "component_type": summary.component_type,
+        "local_origin": list(summary.local_origin),
+        "dimensions": list(summary.dimensions),
+        "bounding_box": [list(summary.bounding_box[0]), list(summary.bounding_box[1])],
+        "block_count": summary.block_count,
+        "block_states": dict(summary.block_states),
+        "materials": dict(summary.materials),
+        "layer_materials": {str(key): dict(value) for key, value in summary.layer_materials.items()},
+        "coordinate_runs": [list(run) for run in summary.coordinate_runs],
+    }
+
+
+def _find_region(regions: Sequence[LitematicRegion], region_name: str) -> LitematicRegion:
+    for region in regions:
+        if region.name == region_name:
+            return region
+    raise LibraryLookupError(f"unknown Litematic region: {region_name!r}")
 
 
 def _read_json(path: Path) -> dict[str, Any]:

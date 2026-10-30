@@ -17,9 +17,9 @@ def test_database_migrations_and_catalog_seed_are_idempotent(tmp_path: Path) -> 
     database = LibraryDatabase(tmp_path / "library.sqlite3")
     service = LibraryService(database, project_root=tmp_path)
 
-    assert service.initialize() == 3
-    assert service.initialize() == 3
-    assert database.schema_version == 3
+    assert service.initialize() == 4
+    assert service.initialize() == 4
+    assert database.schema_version == 4
     assert [region["region_id"] for region in service.list_regions(active_only=True)] == [
         "huizhou_core",
         "jiangnan_suzhou",
@@ -240,7 +240,7 @@ def test_sqlite_transaction_rolls_back_and_backup_is_queryable(tmp_path: Path) -
     with pytest.raises(FileExistsError):
         database.backup_to(backup)
     saved = LibraryDatabase(backup)
-    assert saved.schema_version == 3
+    assert saved.schema_version == 4
     assert saved.get_meta("library_id") == database.get_meta("library_id")
 
 
@@ -415,7 +415,7 @@ def test_database_foreign_keys_and_module_version_history_are_enforced(tmp_path:
                VALUES ('test.versioned-module', 2, 'test_kind', 'planned', 'catalog.json',
                        'unclassified', '[]', '[]', '[]', '{}')"""
         )
-    assert database.schema_version == 3
+    assert database.schema_version == 4
 
 
 def test_database_upgrades_an_existing_v1_file_in_order(tmp_path: Path) -> None:
@@ -432,7 +432,7 @@ def test_database_upgrades_an_existing_v1_file_in_order(tmp_path: Path) -> None:
 
     service = LibraryService(LibraryDatabase(path), project_root=tmp_path)
 
-    assert service.initialize() == 3
+    assert service.initialize() == 4
     assert service.list_knowledge_rules(region="huizhou_core")["knowledge_base_version"] == 3
 
 
