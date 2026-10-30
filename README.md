@@ -103,15 +103,15 @@ jiangnan validate examples\three_bay_hall.jap.json
 jiangnan generate --project examples\three_bay_hall.jap.json
 ```
 
-`hall` 工程可调 `bay_count`（奇数开间）、`bay_width`、`depth`、`column_height`、`plinth_height`、`roof_rise`、`eaves`、`door_width` 和 `materials`。生成器会按参数同步调整柱网、梁、墙、门窗、台基、檐口和屋顶。
+`hall` 工程可调 `bay_count`（奇数开间）、`bay_width`、`depth`、`column_height`、`plinth_height`、`door_width` 和 `materials`。兼容旧工程的 `roof_rise`、`eaves`、`materials.roof` 与 `materials.eaves` 输入；新设计建议使用参数化 `roof_profile`、`eave_profile`、`ridge_profile` 和 `material_palette`，见 [`docs/roof-eaves-v2.md`](docs/roof-eaves-v2.md)。生成器会按参数同步调整柱网、梁、墙、门窗、台基、檐口和屋顶。
 
 ## 版本化知识、参数与资产
 
 厅堂与直廊的新模块通过版本化资产登记创建，执行仍映射到现有 `HallParameters`、`CorridorParameters` 和生成器。参数 schema 将独立输入、派生结果、硬约束与软提示分开，并记录参数来源类别；冲突字段或不支持版本会明确报错。模块工程记录资产、知识库、参数 schema 和来源元数据，旧工程仍可读取。
 
-当前知识库默认为 v3，来源、规则和地域配置分别存放；v1/v2 可显式读取。只有 `huizhou_core`（西递、宏村的村落级官方描述）和 `jiangnan_suzhou`（苏州古典园林的园林级官方描述）启用。其他候选地域为 `catalog_only`；未取得全文和定位的地方资料及对应规则标为待核查，并从普通查询中隐藏。当前资产目录为 v3，hall/corridor 资产 v3 使用参数 schema v2，并仍调用原有方块生成器；v1/v2 资产和 schema 保持可读，既有方块输出不变。新资产的地域标签只表达设计目标，不代表历史形制已经验证。
+当前知识库默认为 v4，来源、规则和地域配置分别存放；v1-v3 可显式读取。v4 增加屋顶生成器与参数解析器的项目代码来源，不新增历史屋顶规则，也不改变 v3 的地域和知识规则。只有 `huizhou_core`（西递、宏村的村落级官方描述）和 `jiangnan_suzhou`（苏州古典园林的园林级官方描述）启用。其他候选地域为 `catalog_only`；未取得全文和定位的地方资料及对应规则标为待核查，并从普通查询中隐藏。当前资产目录为 v4，hall/corridor 资产 v4 使用参数 schema v3；v1-v3 资产、v1-v2 参数 schema 保持可读。新资产的地域标签只表达设计目标，不代表历史形制已经验证。
 
-可复现的三开间参数样例见 `examples/hall_v1_parameters.json`（为兼容演示而固定 asset v2/schema v1）。`bay_spacing` 映射到现有参数 `bay_width`；当前屋顶断面仅支持生成器实现的对称双坡。新参数的来源类别和模块资产示例见 [`docs/parameter-registry.md`](docs/parameter-registry.md)；地域范围、来源核查等级和待核查记录见 [`docs/knowledge-regions.md`](docs/knowledge-regions.md)。用户 `.litematic` 只登记为视觉偏好参考，不作为历史证据。
+可复现的三开间参数样例见 `examples/hall_v1_parameters.json`（为兼容演示而固定 asset v2/schema v1）。`bay_spacing` 映射到现有参数 `bay_width`。Roof & Eaves v2 保留对称双坡主体，可配置坡面断面、屋脊高度、檐口层次、出檐、屋脊盖脊与材料；歇山、攒尖等复杂屋顶暂不支持。三组预设是 Minecraft 创作方案，不代表历史测绘或营造标准。新参数的来源类别和模块资产示例见 [`docs/parameter-registry.md`](docs/parameter-registry.md)；地域范围、来源核查等级和待核查记录见 [`docs/knowledge-regions.md`](docs/knowledge-regions.md)。用户 `.litematic` 只登记为视觉偏好参考，不作为历史证据。
 
 ## 本地建筑参考库（DB-1）
 

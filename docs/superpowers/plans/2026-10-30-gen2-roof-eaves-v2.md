@@ -132,9 +132,9 @@
 **Interfaces:**
 - Existing BlockState transforms, Assembly rotation, project generation, and Schematic v3 reader/writer are covered by Tasks 2–4; this task adds user-facing operating guidance without changing those APIs.
 
-- [ ] **Step 1: Document** profile fields, aliases/conflicts, the three preset parameter sets, Windows usage examples, and the fact that Minecraft/WorldEdit/Mine2Blend live checks remain separate.
-- [ ] **Step 2: Run `pytest -q`** from the repository root and confirm the complete existing and new suite passes; run `git diff --check`.
-- [ ] **Step 3: Commit** as `docs: document roof and eaves profiles`.
+- [x] **Step 1: Document** profile fields, aliases/conflicts, the three preset parameter sets, Windows usage examples, and the fact that Minecraft/WorldEdit/Mine2Blend live checks remain separate; update README and current registry-version references.
+- [x] **Step 2: Run `pytest -q`** from the repository root and confirm the complete existing and new suite passes: 350 passed in 13.02s; run `git diff --check`.
+- [x] **Step 3: Commit** as `docs: document roof and eaves profiles`.
 
 ## Final verification
 
