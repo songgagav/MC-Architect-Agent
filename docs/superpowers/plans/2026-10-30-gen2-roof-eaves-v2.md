@@ -52,22 +52,23 @@
 
 **Files:**
 - Modify: `jiangnan_agent/generators/components.py`
+- Modify: `jiangnan_agent/generators/roof_profiles.py` (reject air states as occupied roof materials)
 - Modify: `tests/test_components.py`
 - Create: `tests/test_roof_eaves_v2.py`
 
 **Interfaces:**
-- Add `generate_roof_surface(width, depth, base_y, roof_profile, palette, excluded_cells=()) -> VoxelModel`.
+- Add `generate_roof_surface(width, depth, base_y, roof_profile, eave_profile, palette, excluded_cells=()) -> VoxelModel`; the eave profile supplies both the cross-slope overhang and the ridge-end projection needed to lay out the surface.
 - Add `generate_eaves_component(width, depth, base_y, roof_profile, eave_profile, palette) -> tuple[VoxelModel, frozenset[Position]]`; the second value is the exact set of surface edge cells owned by the eaves.
-- Add `generate_ridge_cap(width, depth, base_y, roof_profile, ridge_profile, palette) -> tuple[VoxelModel, frozenset[Position]]`; the second value is the exact set of surface cells owned by the cap.
+- Add `generate_ridge_cap(width, depth, base_y, roof_profile, eave_profile, ridge_profile, palette) -> tuple[VoxelModel, frozenset[Position]]`; the second value is the exact set of surface cells owned by the cap, and the eave profile supplies its ridge-end span.
 - Add immutable `RoofComponents(surface, eaves, ridge, combined)` and `generate_roof_components(width, depth, base_y, roof_profile, eave_profile, ridge_profile, palette) -> RoofComponents`. It passes the two ownership sets to the surface builder and rejects every other overlap.
 - Keep the existing `generate_gable_roof(width, depth, base_y, rise, eaves, material) -> VoxelModel` signature as a wrapper that builds the legacy default profile.
 - The roof builder samples each actual half-run position, applies surface bands, and skips cells owned by an enabled eave edge layer or ridge cap. Declared eave-to-beam connections are allowed; other overlaps are errors.
 
-- [ ] **Step 1: Write failing component tests** for stair facings on both slopes, permille band selection including the ridge endpoint, eave thickness and end projection, ridge cap width/height, ownership masks, no unintended overlap, invalid material BlockStates, and 90-degree rotation of the new component output.
-- [ ] **Step 2: Run `pytest tests/test_roof_eaves_v2.py tests/test_components.py -q`** and confirm expected missing behavior failures.
-- [ ] **Step 3: Implement the three pure builders** using the profile models from Task 1 and preserve the legacy function as an adapter.
-- [ ] **Step 4: Run those targeted tests** and confirm the new component and rotation cases pass; legacy wrapper output remains covered by Task 3's hash tests.
-- [ ] **Step 5: Commit** as `feat: add composable roof eaves and ridge builders`.
+- [x] **Step 1: Write failing component tests** for stair facings on both slopes, permille band selection including the ridge endpoint, eave thickness and end projection, ridge cap width/height, ownership masks, no unintended overlap, invalid material BlockStates (including air states), and 90-degree rotation of the new component output.
+- [x] **Step 2: Run `pytest tests/test_roof_eaves_v2.py tests/test_components.py -q`** and confirm expected missing behavior failures. Initial RED: 10 expected missing-builder failures, 14 legacy tests passed; the air-material regression was then added as a separate RED/GREEN check.
+- [x] **Step 3: Implement the three pure builders** using the profile models from Task 1 and preserve the legacy function as an adapter.
+- [x] **Step 4: Run those targeted tests** and confirm the new component and rotation cases pass; legacy wrapper output remains covered by Task 3's hash tests. Final expanded profile/component run: 37 passed.
+- [x] **Step 5: Commit** as `feat: add composable roof eaves and ridge builders`.
 
 ### Task 3: Hall and corridor integration with default-output lock
 

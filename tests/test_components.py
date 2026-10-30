@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+
 import pytest
 
 from jiangnan_agent.core.block import BlockState
@@ -140,3 +142,9 @@ def test_roof_rejects_even_depth_excessive_rise_and_non_stair_material() -> None
         generate_gable_roof(5, 5, 0, 3, 0, "minecraft:stone_brick_stairs")
     with pytest.raises(ValueError, match="stair block"):
         generate_gable_roof(5, 5, 0, 1, 0, "minecraft:stone")
+
+
+def test_components_module_exposes_the_profile_roof_surface_builder() -> None:
+    components = importlib.import_module("jiangnan_agent.generators.components")
+
+    assert callable(getattr(components, "generate_roof_surface", None))

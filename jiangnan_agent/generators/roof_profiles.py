@@ -201,7 +201,10 @@ class MaterialPalette:
             role = _role(role, "palette role")
             if not isinstance(value, str):
                 raise ValueError(f"material for role {role!r} must be a block-state string")
-            normalized[role] = BlockState.parse(value).to_string()
+            state = BlockState.parse(value)
+            if state.block_id.rsplit(":", 1)[-1] in {"air", "cave_air", "void_air"}:
+                raise ValueError("air cannot be used as a roof material")
+            normalized[role] = state.to_string()
         object.__setattr__(self, "roles", MappingProxyType(normalized))
 
 

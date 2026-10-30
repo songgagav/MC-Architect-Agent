@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
+from fractions import Fraction
 
 from ..core.block import BlockState
 from ..core.geometry import BoundingBox, Position
 from ..core.scene import VoxelModel
+from .roof_profiles import (
+    EaveProfile,
+    MaterialPalette,
+    RidgeProfile,
+    RoofProfile,
+    sample_roof_section,
+)
 
 Material = BlockState | str
 _HORIZONTAL_FACES = ("north", "east", "south", "west")
@@ -240,7 +249,7 @@ def generate_gable_roof(
     eaves: int,
     material: Material,
 ) -> VoxelModel:
-    """Create a symmetric stepped gable roof, with its ridge running along X."""
+    """Create the legacy symmetric stepped roof through the profile builder."""
 
     width = _integer(width, "width", minimum=1)
     depth = _integer(depth, "depth", minimum=3)
@@ -255,23 +264,254 @@ def generate_gable_roof(
     state = _material(material)
     if not state.block_id.endswith("_stairs"):
         raise ValueError("gable roof material must be a stair block")
+    end_treatment = "overhanging_gable" if eaves else "hard_gable"
+    roof_profile = RoofProfile(ridge_height=rise)
+    eave_profile = EaveProfile(
+        side_overhang=eaves,
+        gable_end_treatment=end_treatment,
+        gable_end_projection=eaves,
+        thickness=0,
+        layer_roles=(),
+    )
+    palette = MaterialPalette({"roof_stair": state.to_string()})
+    return generate_roof_surface(width, depth, base_y, roof_profile, eave_profile, palette)
 
-    model = VoxelModel()
-    center_z = half_depth
-    for z in range(-eaves, depth + eaves):
-        if z < 0 or z >= depth:
-            profile = 0
-        else:
-            distance_from_eave = min(z, depth - 1 - z)
-            profile = (distance_from_eave * rise + half_depth // 2) // half_depth
-        facing = "south" if z <= center_z else "north"
-        stair = _state_with(
+
+@dataclass(frozen=True)
+class RoofComponents:
+    """The independently generated and assembled roof component models."""
+
+    surface: VoxelModel
+    eaves: VoxelModel
+    ridge: VoxelModel
+    combined: VoxelModel
+
+
+def _validate_roof_profiles(
+    width: int,
+    depth: int,
+    base_y: int,
+    roof_profile: RoofProfile,
+    eave_profile: EaveProfile,
+    palette: MaterialPalette,
+) -> tuple[int, tuple[int, ...]]:
+    width = _integer(width, "width", minimum=1)
+    depth = _integer(depth, "depth", minimum=3)
+    base_y = _integer(base_y, "base_y")
+    if depth % 2 == 0:
+        raise ValueError("gable roof depth must be odd and at least 3")
+    if not isinstance(roof_profile, RoofProfile):
+        raise ValueError("roof_profile must be a RoofProfile")
+    if not isinstance(eave_profile, EaveProfile):
+        raise ValueError("eave_profile must be an EaveProfile")
+    if not isinstance(palette, MaterialPalette):
+        raise ValueError("palette must be a MaterialPalette")
+    for band in roof_profile.surface_bands:
+        if band.material_role not in palette.roles:
+            raise ValueError(f"missing material palette role {band.material_role!r}")
+    for role in eave_profile.layer_roles:
+        if role not in palette.roles:
+            raise ValueError(f"missing material palette role {role!r}")
+    if eave_profile.decoration_role is not None and eave_profile.decoration_role not in palette.roles:
+        raise ValueError(f"missing material palette role {eave_profile.decoration_role!r}")
+    half_run = (depth - 1) // 2
+    section = sample_roof_section(half_run, roof_profile.ridge_height, roof_profile.section_points)
+    return base_y, section
+
+
+def _roof_band(roof_profile: RoofProfile, distance: int, half_run: int):
+    position = Fraction(distance * 1000, half_run)
+    last_index = len(roof_profile.surface_bands) - 1
+    for index, band in enumerate(roof_profile.surface_bands):
+        if band.start <= position < band.end or (index == last_index and position == band.end):
+            return band
+    raise ValueError(f"no surface band covers roof run position {position}")
+
+
+def _surface_state(
+    band_form: str,
+    material_role: str,
+    palette: MaterialPalette,
+    facing: str,
+) -> BlockState:
+    try:
+        state = _material(palette.roles[material_role])
+    except KeyError as exc:
+        raise ValueError(f"missing material palette role {material_role!r}") from exc
+    if band_form == "stair":
+        if not state.block_id.endswith("_stairs"):
+            raise ValueError(f"material for stair surface role {material_role!r} must be a stair block")
+        return _state_with(
             state,
             facing=facing,
             half="bottom",
             shape="straight",
             waterlogged="false",
         )
-        for x in range(-eaves, width + eaves):
-            model.set_block((x, base_y + profile, z), stair)
+    if band_form == "slab":
+        if not state.block_id.endswith("_slab"):
+            raise ValueError(f"material for slab surface role {material_role!r} must be a slab block")
+        return _state_with(state, type="top", waterlogged="false")
+    if state.block_id.endswith(("_stairs", "_slab")):
+        raise ValueError(f"material for full_block surface role {material_role!r} must be a full block")
+    return state
+
+
+def generate_roof_surface(
+    width: int,
+    depth: int,
+    base_y: int,
+    roof_profile: RoofProfile,
+    eave_profile: EaveProfile,
+    palette: MaterialPalette,
+    excluded_cells: Iterable[Position] = (),
+) -> VoxelModel:
+    """Generate a stepped roof skin, omitting coordinates owned by other parts."""
+
+    base_y, section = _validate_roof_profiles(width, depth, base_y, roof_profile, eave_profile, palette)
+    width = _integer(width, "width", minimum=1)
+    depth = _integer(depth, "depth", minimum=3)
+    half_run = (depth - 1) // 2
+    excluded = {_position(position, "excluded cell") for position in excluded_cells}
+    x_start = -eave_profile.gable_end_projection
+    x_end = width + eave_profile.gable_end_projection
+    z_start = -eave_profile.side_overhang
+    z_end = depth + eave_profile.side_overhang
+    center_z = half_run
+    model = VoxelModel()
+    for z in range(z_start, z_end):
+        if z < 0 or z >= depth:
+            distance = 0
+        else:
+            distance = min(z, depth - 1 - z)
+        height = section[distance]
+        band = _roof_band(roof_profile, distance, half_run)
+        facing = "south" if z <= center_z else "north"
+        state = _surface_state(band.form, band.material_role, palette, facing)
+        for x in range(x_start, x_end):
+            position = (x, base_y + height, z)
+            if position not in excluded:
+                model.set_block(position, state)
     return model
+
+
+def generate_eaves_component(
+    width: int,
+    depth: int,
+    base_y: int,
+    roof_profile: RoofProfile,
+    eave_profile: EaveProfile,
+    palette: MaterialPalette,
+) -> tuple[VoxelModel, frozenset[Position]]:
+    """Generate eave trim and return the roof-edge surface cells it owns."""
+
+    _base_y, _section = _validate_roof_profiles(width, depth, base_y, roof_profile, eave_profile, palette)
+    width = _integer(width, "width", minimum=1)
+    depth = _integer(depth, "depth", minimum=3)
+    start_x = -eave_profile.gable_end_projection
+    end_x = width + eave_profile.gable_end_projection
+    edge_zs = (0, depth - 1)
+    model = VoxelModel()
+    owned: set[Position] = set()
+    for layer, role in enumerate(eave_profile.layer_roles):
+        state = _material(palette.roles[role])
+        y = base_y - layer
+        for z in edge_zs:
+            for x in range(start_x, end_x):
+                position = (x, y, z)
+                model.set_block(position, state)
+                if layer == 0:
+                    owned.add(position)
+    if eave_profile.decoration_role is not None:
+        decoration = _material(palette.roles[eave_profile.decoration_role])
+        y = base_y - eave_profile.thickness - 1
+        for x in range(start_x, end_x, eave_profile.decoration_spacing):
+            for z in edge_zs:
+                model.set_block((x, y, z), decoration)
+    return model, frozenset(owned)
+
+
+def generate_ridge_cap(
+    width: int,
+    depth: int,
+    base_y: int,
+    roof_profile: RoofProfile,
+    eave_profile: EaveProfile,
+    ridge_profile: RidgeProfile,
+    palette: MaterialPalette,
+) -> tuple[VoxelModel, frozenset[Position]]:
+    """Generate a ridge cap and return the roof-apex cells it owns."""
+
+    base_y, _section = _validate_roof_profiles(width, depth, base_y, roof_profile, eave_profile, palette)
+    width = _integer(width, "width", minimum=1)
+    depth = _integer(depth, "depth", minimum=3)
+    if not isinstance(ridge_profile, RidgeProfile):
+        raise ValueError("ridge_profile must be a RidgeProfile")
+    if ridge_profile.cap_width > depth:
+        raise ValueError("ridge cap width cannot exceed roof depth")
+    if ridge_profile.cap_height > 0 and ridge_profile.material_role not in palette.roles:
+        raise ValueError(f"missing material palette role {ridge_profile.material_role!r}")
+    if ridge_profile.decoration_role is not None and ridge_profile.decoration_role not in palette.roles:
+        raise ValueError(f"missing material palette role {ridge_profile.decoration_role!r}")
+    model = VoxelModel()
+    if ridge_profile.cap_height == 0 and ridge_profile.decoration_role is None:
+        return model, frozenset()
+    x_start = -eave_profile.gable_end_projection
+    x_end = width + eave_profile.gable_end_projection
+    center_z = (depth - 1) // 2
+    z_start = center_z - ridge_profile.cap_width // 2
+    owned: set[Position] = set()
+    if ridge_profile.cap_height > 0:
+        cap_state = _material(palette.roles[ridge_profile.material_role])
+        for layer in range(ridge_profile.cap_height):
+            y = base_y + roof_profile.ridge_height + layer
+            for z in range(z_start, z_start + ridge_profile.cap_width):
+                for x in range(x_start, x_end):
+                    position = (x, y, z)
+                    model.set_block(position, cap_state)
+                    if layer == 0:
+                        owned.add(position)
+    if ridge_profile.decoration_role is not None:
+        decoration = _material(palette.roles[ridge_profile.decoration_role])
+        y = base_y + roof_profile.ridge_height + max(1, ridge_profile.cap_height)
+        for x in range(x_start, x_end, ridge_profile.decoration_spacing):
+            model.set_block((x, y, center_z), decoration)
+    return model, frozenset(owned)
+
+
+def generate_roof_components(
+    width: int,
+    depth: int,
+    base_y: int,
+    roof_profile: RoofProfile,
+    eave_profile: EaveProfile,
+    ridge_profile: RidgeProfile,
+    palette: MaterialPalette,
+) -> RoofComponents:
+    """Build separate surface, eaves, ridge, and combined roof models."""
+
+    if not isinstance(ridge_profile, RidgeProfile):
+        raise ValueError("ridge_profile must be a RidgeProfile")
+    eaves, eave_owned = generate_eaves_component(
+        width, depth, base_y, roof_profile, eave_profile, palette
+    )
+    ridge, ridge_owned = generate_ridge_cap(
+        width, depth, base_y, roof_profile, eave_profile, ridge_profile, palette
+    )
+    surface = generate_roof_surface(
+        width,
+        depth,
+        base_y,
+        roof_profile,
+        eave_profile,
+        palette,
+        excluded_cells=(*eave_owned, *ridge_owned),
+    )
+    combined = VoxelModel()
+    for component_name, component in (("surface", surface), ("eaves", eaves), ("ridge", ridge)):
+        overlap = set(combined.blocks).intersection(component.blocks)
+        if overlap:
+            raise ValueError(f"unexpected roof component overlap at {min(overlap)} while adding {component_name}")
+        for position, state in component.blocks.items():
+            combined.set_block(position, state)
+    return RoofComponents(surface, eaves, ridge, combined)
