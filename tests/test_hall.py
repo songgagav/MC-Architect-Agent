@@ -22,6 +22,11 @@ def test_default_hall_is_three_bays_with_openings_and_connected_frame() -> None:
     assert model.block_at((7, 2, 6)).block_id == "minecraft:spruce_door"
 
 
+def test_hall_keeps_legacy_public_door_width_default() -> None:
+    assert HallParameters().door_width == 2
+    assert HallParameters(door_width=1).door_width == 1
+
+
 def test_five_bay_hall_expands_posts_and_is_deterministic() -> None:
     parameters = HallParameters(bay_count=5)
 

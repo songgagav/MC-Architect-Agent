@@ -19,6 +19,11 @@ from .components import (
     generate_wall,
     generate_window,
 )
+from .facade_profiles import (
+    FacadeProfile,
+    facade_profile_from_mapping,
+    validate_facade_profile_for_hall,
+)
 from .roof_profiles import (
     EaveProfile,
     MaterialPalette,
@@ -169,14 +174,16 @@ class HallParameters:
     plinth_height: int = 1
     roof_rise: int | _Unspecified = _UNSPECIFIED
     eaves: int | _Unspecified = _UNSPECIFIED
-    door_width: int = 2
+    door_width: int | _Unspecified = _UNSPECIFIED
     materials: Mapping[str, str] | None = None
+    facade_profile: FacadeProfile | None = None
     roof_profile: RoofProfile | None = None
     eave_profile: EaveProfile | None = None
     ridge_profile: RidgeProfile | None = None
     material_palette: MaterialPalette | None = None
     _roof_rise_explicit: bool = field(default=False, init=False, repr=False, compare=False)
     _eaves_explicit: bool = field(default=False, init=False, repr=False, compare=False)
+    _door_width_explicit: bool = field(default=False, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         _coerce_profile_fields(self)
@@ -189,7 +196,8 @@ class HallParameters:
         eaves_explicit = self.eaves is not _UNSPECIFIED
         roof_rise = 3 if not roof_rise_explicit else _require_integer(self.roof_rise, "roof_rise", 1)
         eaves = 1 if not eaves_explicit else _require_integer(self.eaves, "eaves", 0)
-        door_width = _require_integer(self.door_width, "door_width", 1)
+        door_width_explicit = self.door_width is not _UNSPECIFIED
+        door_width = 2 if not door_width_explicit else _require_integer(self.door_width, "door_width", 1)
         if bay_count % 2 == 0:
             raise ValueError("bay_count must be an odd number of at least 3")
         if depth % 2 == 0:
@@ -213,12 +221,20 @@ class HallParameters:
         if self.roof_profile is not None:
             sample_roof_section((depth - 1) // 2, self.roof_profile.ridge_height, self.roof_profile.section_points)
         normalized_materials = _checked_materials(self.materials, DEFAULT_HALL_MATERIALS)
+        _validate_facade_legacy_conflicts(
+            self.facade_profile,
+            door_width=door_width,
+            door_width_explicit=door_width_explicit,
+            materials=normalized_materials,
+        )
         _validate_palette_aliases(normalized_materials, self.material_palette)
         object.__setattr__(self, "roof_rise", roof_rise)
         object.__setattr__(self, "eaves", eaves)
+        object.__setattr__(self, "door_width", door_width)
         object.__setattr__(self, "materials", normalized_materials)
         object.__setattr__(self, "_roof_rise_explicit", roof_rise_explicit)
         object.__setattr__(self, "_eaves_explicit", eaves_explicit)
+        object.__setattr__(self, "_door_width_explicit", door_width_explicit)
 
 
 @dataclass(frozen=True)
@@ -232,6 +248,7 @@ class CorridorParameters:
     roof_rise: int | _Unspecified = _UNSPECIFIED
     eaves: int | _Unspecified = _UNSPECIFIED
     materials: Mapping[str, str] | None = None
+    facade_profile: FacadeProfile | None = None
     roof_profile: RoofProfile | None = None
     eave_profile: EaveProfile | None = None
     ridge_profile: RidgeProfile | None = None
@@ -266,6 +283,7 @@ class CorridorParameters:
         if self.roof_profile is not None:
             sample_roof_section((width - 1) // 2, self.roof_profile.ridge_height, self.roof_profile.section_points)
         normalized_materials = _checked_materials(self.materials, DEFAULT_CORRIDOR_MATERIALS)
+        _validate_facade_legacy_conflicts(self.facade_profile, materials=normalized_materials)
         _validate_palette_aliases(normalized_materials, self.material_palette)
         object.__setattr__(self, "roof_rise", roof_rise)
         object.__setattr__(self, "eaves", eaves)
@@ -280,6 +298,7 @@ def _coerce_profile_fields(parameters: HallParameters | CorridorParameters) -> N
         ("eave_profile", eave_profile_from_mapping),
         ("ridge_profile", ridge_profile_from_mapping),
         ("material_palette", material_palette_from_mapping),
+        ("facade_profile", facade_profile_from_mapping),
     ):
         value = getattr(parameters, name)
         if value is not None and not isinstance(
@@ -289,9 +308,31 @@ def _coerce_profile_fields(parameters: HallParameters | CorridorParameters) -> N
                 "eave_profile": EaveProfile,
                 "ridge_profile": RidgeProfile,
                 "material_palette": MaterialPalette,
+                "facade_profile": FacadeProfile,
             }[name],
         ):
             object.__setattr__(parameters, name, parser(value))
+    if isinstance(parameters, HallParameters) and parameters.facade_profile is not None:
+        validate_facade_profile_for_hall(parameters.facade_profile)
+
+
+def _validate_facade_legacy_conflicts(
+    profile: FacadeProfile | None,
+    *,
+    door_width: int | None = None,
+    door_width_explicit: bool = False,
+    materials: Mapping[str, str] | None = None,
+) -> None:
+    if profile is None:
+        return
+    if door_width_explicit and door_width != profile.door.width:
+        raise ValueError("explicit door_width conflicts with facade profile door width")
+    if materials is None:
+        return
+    for role, value in materials.items():
+        profile_value = profile.materials.get(role)
+        if profile_value is not None and BlockState.parse(value) != BlockState.parse(profile_value):
+            raise ValueError(f"explicit materials role {role!r} conflicts with facade profile material")
 
 
 def _validate_profile_inputs(
