@@ -16,163 +16,11 @@ from .roof_profiles import (
     RoofProfile,
     sample_roof_section,
 )
+from .minecraft_materials import roof_material_shape, validate_roof_material_state
 
 Material = BlockState | str
 _HORIZONTAL_FACES = ("north", "east", "south", "west")
 _AXIS_BLOCK_SUFFIXES = ("_log", "_wood", "_stem", "_hyphae")
-# Geometry checks are conservative for the pinned vanilla target; unknown families fail closed.
-_NON_FULL_BLOCK_SUFFIXES = (
-    "_stairs",
-    "_slab",
-    "_fence",
-    "_fence_gate",
-    "_wall",
-    "_door",
-    "_trapdoor",
-    "_button",
-    "_pressure_plate",
-    "_rail",
-    "_pane",
-    "_sign",
-    "_banner",
-    "_carpet",
-    "_bed",
-    "_chest",
-    "_skull",
-    "_head",
-    "_torch",
-    "_sapling",
-)
-_NON_FULL_BLOCK_IDS = frozenset(
-    {
-        "minecraft:torch",
-        "minecraft:lantern",
-        "minecraft:soul_lantern",
-        "minecraft:soul_sand",
-        "minecraft:chain",
-        "minecraft:iron_bars",
-        "minecraft:cobweb",
-        "minecraft:ladder",
-        "minecraft:lever",
-        "minecraft:redstone_wire",
-        "minecraft:repeater",
-        "minecraft:comparator",
-        "minecraft:lightning_rod",
-        "minecraft:end_rod",
-        "minecraft:candle",
-        "minecraft:scaffolding",
-        "minecraft:tripwire",
-        "minecraft:tripwire_hook",
-        "minecraft:flower_pot",
-        "minecraft:dead_bush",
-        "minecraft:short_grass",
-        "minecraft:tall_grass",
-        "minecraft:fern",
-        "minecraft:large_fern",
-        "minecraft:dandelion",
-        "minecraft:poppy",
-        "minecraft:blue_orchid",
-        "minecraft:allium",
-        "minecraft:azure_bluet",
-        "minecraft:cornflower",
-        "minecraft:oxeye_daisy",
-        "minecraft:lily_of_the_valley",
-        "minecraft:torchflower",
-        "minecraft:wither_rose",
-        "minecraft:open_eyeblossom",
-        "minecraft:closed_eyeblossom",
-        "minecraft:large_amethyst_bud",
-        "minecraft:medium_amethyst_bud",
-        "minecraft:small_amethyst_bud",
-        "minecraft:amethyst_cluster",
-    }
-)
-_FULL_BLOCK_SUFFIXES = (
-    "_block",
-    "_bricks",
-    "_planks",
-    "_log",
-    "_wood",
-    "_stem",
-    "_hyphae",
-    "_wool",
-    "_concrete",
-    "_concrete_powder",
-    "_terracotta",
-    "_ore",
-    "_sand",
-    "_gravel",
-    "_dirt",
-    "_soil",
-    "_stone",
-    "_granite",
-    "_diorite",
-    "_andesite",
-    "_tuff",
-    "_deepslate",
-    "_blackstone",
-    "_copper",
-    "_quartz",
-    "_ice",
-    "_glass",
-    "_basalt",
-    "_obsidian",
-    "_prismarine",
-    "_pumpkin",
-    "_melon",
-    "_purpur",
-)
-_FULL_BLOCK_IDS = frozenset(
-    {
-        "minecraft:stone",
-        "minecraft:granite",
-        "minecraft:diorite",
-        "minecraft:andesite",
-        "minecraft:tuff",
-        "minecraft:deepslate",
-        "minecraft:glass",
-        "minecraft:glowstone",
-        "minecraft:ice",
-        "minecraft:obsidian",
-        "minecraft:netherrack",
-        "minecraft:prismarine",
-        "minecraft:purpur_pillar",
-        "minecraft:jack_o_lantern",
-        "minecraft:pumpkin",
-        "minecraft:melon",
-        "minecraft:podzol",
-        "minecraft:mycelium",
-        "minecraft:sculk",
-        "minecraft:cobblestone",
-        "minecraft:bedrock",
-        "minecraft:clay",
-        "minecraft:sponge",
-        "minecraft:wet_sponge",
-        "minecraft:bricks",
-        "minecraft:bookshelf",
-        "minecraft:chiseled_bookshelf",
-        "minecraft:crafting_table",
-        "minecraft:furnace",
-        "minecraft:blast_furnace",
-        "minecraft:smoker",
-        "minecraft:barrel",
-        "minecraft:note_block",
-        "minecraft:jukebox",
-        "minecraft:dispenser",
-        "minecraft:dropper",
-        "minecraft:observer",
-        "minecraft:piston",
-        "minecraft:sticky_piston",
-        "minecraft:beacon",
-        "minecraft:target",
-        "minecraft:hay_block",
-        "minecraft:dried_kelp_block",
-        "minecraft:ancient_debris",
-        "minecraft:dragon_egg",
-        "minecraft:sea_lantern",
-    }
-)
-
 
 def _material(value: Material) -> BlockState:
     if isinstance(value, BlockState):
@@ -458,6 +306,8 @@ def _validate_roof_profiles(
         raise ValueError("eave_profile must be an EaveProfile")
     if not isinstance(palette, MaterialPalette):
         raise ValueError("palette must be a MaterialPalette")
+    for state_string in palette.roles.values():
+        validate_roof_material_state(_material(state_string))
     for band in roof_profile.surface_bands:
         if band.material_role not in palette.roles:
             raise ValueError(f"missing material palette role {band.material_role!r}")
@@ -490,8 +340,9 @@ def _surface_state(
         state = _material(palette.roles[material_role])
     except KeyError as exc:
         raise ValueError(f"missing material palette role {material_role!r}") from exc
+    shape = roof_material_shape(state)
     if band_form == "stair":
-        if not state.block_id.endswith("_stairs"):
+        if shape != "stair":
             raise ValueError(f"material for stair surface role {material_role!r} must be a stair block")
         return _state_with(
             state,
@@ -501,15 +352,10 @@ def _surface_state(
             waterlogged="false",
         )
     if band_form == "slab":
-        if not state.block_id.endswith("_slab"):
+        if shape != "slab":
             raise ValueError(f"material for slab surface role {material_role!r} must be a slab block")
         return _state_with(state, type="top", waterlogged="false")
-    state_properties = dict(state.properties)
-    double_slab = state.block_id.endswith("_slab") and state_properties.get("type") == "double"
-    known_non_full = state.block_id in _NON_FULL_BLOCK_IDS or state.block_id.endswith(_NON_FULL_BLOCK_SUFFIXES)
-    known_full = state.block_id in _FULL_BLOCK_IDS or state.block_id.endswith(_FULL_BLOCK_SUFFIXES)
-    vanilla_namespace = state.block_id.startswith("minecraft:")
-    if not ((double_slab and vanilla_namespace) or (known_full and not known_non_full and vanilla_namespace)):
+    if shape != "full":
         raise ValueError(f"material for full_block surface role {material_role!r} must be a full block")
     return state
 
@@ -536,6 +382,7 @@ def generate_roof_surface(
     z_end = depth + eave_profile.side_overhang
     center_z = half_run
     model = VoxelModel()
+    rows: list[tuple[int, int, object, BlockState]] = []
     for z in range(z_start, z_end):
         if z < 0 or z >= depth:
             distance = 0
@@ -545,10 +392,23 @@ def generate_roof_surface(
         band = _roof_band(roof_profile, distance, half_run)
         facing = "south" if z <= center_z else "north"
         state = _surface_state(band.form, band.material_role, palette, facing)
+        rows.append((z, height, band, state))
         for x in range(x_start, x_end):
             position = (x, base_y + height, z)
             if position not in excluded:
                 model.set_block(position, state)
+    for (z, height, band, state), (next_z, next_height, next_band, next_state) in zip(rows, rows[1:]):
+        if next_z != z + 1 or next_height == height:
+            continue
+        if band.form != "full_block" and next_band.form != "full_block":
+            continue
+        fill_state = state if band.form == "full_block" else next_state
+        fill_position_y = base_y + (next_height if next_height > height else height)
+        fill_position_z = z if next_height > height else next_z
+        for x in range(x_start, x_end):
+            position = (x, fill_position_y, fill_position_z)
+            if position not in excluded:
+                model.set_block(position, fill_state)
     return model
 
 

@@ -84,8 +84,8 @@
     "post_x_positions": "sorted(set(range(0, length, column_spacing)) | {length - 1})",
     "post_count_per_side": "len(post_x_positions)",
     "effective_passage_width": "max(1, width - 2) when interfaces.passage_width is null",
-    "bounds_width": "plinth_width + 2 * eave_profile.gable_end_projection",
-    "bounds_depth": "plinth_depth + 2 * eave_profile.side_overhang"
+    "bounds_width": "length + 2 * eave_profile.gable_end_projection",
+    "bounds_depth": "width + 2 * eave_profile.side_overhang"
   },
   "generator_fields": {
     "length": "length",

@@ -14,6 +14,7 @@ from typing import Any
 from ..assets.registry import get_asset
 from ..core.block import BlockState
 from ..generators.hall import CorridorParameters, HallParameters
+from ..generators.minecraft_materials import validate_roof_material_state
 from ..generators.roof_profiles import (
     EaveProfile,
     MaterialPalette,
@@ -654,13 +655,26 @@ def _derived_values(schema: ParameterSchema, config: Mapping[str, object]) -> di
         assert isinstance(interfaces, Mapping)
         passage_width = interfaces["passage_width"]
         effective_passage_width = max(1, width - 2) if passage_width is None else passage_width
-        return {
+        derived = {
             "platform_length": length,
             "platform_width": width,
             "post_x_positions": positions,
             "post_count_per_side": len(positions),
             "effective_passage_width": effective_passage_width,
         }
+        if schema.version >= 3:
+            eave_profile = config["eave_profile"]
+            assert isinstance(eave_profile, Mapping)
+            gable_projection = eave_profile["gable_end_projection"]
+            side_overhang = eave_profile["side_overhang"]
+            if any(
+                isinstance(value, bool) or not isinstance(value, int)
+                for value in (gable_projection, side_overhang)
+            ):
+                raise ValueError("eave projection values must be integers")
+            derived["bounds_width"] = length + 2 * gable_projection
+            derived["bounds_depth"] = width + 2 * side_overhang
+        return derived
     raise ValueError(f"no deterministic derived-parameter rules for {schema.kind!r}")
 
 
@@ -688,6 +702,11 @@ def _resolve_generator_parameters(schema: ParameterSchema, config: Mapping[str, 
         generator_values["material_palette"] = _material_palette_from_mapping(
             generator_values["material_palette"]
         )
+        for role, state_string in generator_values["material_palette"].roles.items():
+            try:
+                validate_roof_material_state(BlockState.parse(state_string))
+            except ValueError as exc:
+                raise ValueError(f"invalid material_palette role {role!r}: {exc}") from exc
     generator_type = HallParameters if schema.kind == "hall" else CorridorParameters
     generator_parameters = generator_type(**generator_values)
     adapter_options = {

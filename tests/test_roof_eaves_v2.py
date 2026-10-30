@@ -87,6 +87,33 @@ def test_surface_bands_choose_the_material_at_the_ridge_endpoint() -> None:
     assert roof.block_at((0, 10, 2)) == BlockState.parse("minecraft:stone_bricks")
 
 
+def test_full_block_bands_fill_each_one_block_roof_slope_transition() -> None:
+    generate = _builder("generate_roof_surface")
+    roof = generate(
+        1,
+        5,
+        10,
+        RoofProfile(
+            ridge_height=2,
+            surface_bands=(SurfaceBand(0, 1000, "full_block", "roof_block"),),
+        ),
+        EaveProfile(
+            side_overhang=0,
+            gable_end_treatment="hard_gable",
+            gable_end_projection=0,
+            thickness=0,
+            layer_roles=(),
+        ),
+        _palette(),
+    )
+
+    full = BlockState.parse("minecraft:stone_bricks")
+    assert roof.block_at((0, 11, 0)) == full
+    assert roof.block_at((0, 12, 1)) == full
+    assert roof.block_at((0, 12, 3)) == full
+    assert roof.block_at((0, 11, 4)) == full
+
+
 @pytest.mark.parametrize(
     "material",
     (
@@ -94,7 +121,6 @@ def test_surface_bands_choose_the_material_at_the_ridge_endpoint() -> None:
         "minecraft:oak_fence",
         "minecraft:oak_door",
         "minecraft:torch",
-        "example:modded_full_block",
     ),
 )
 def test_full_block_surface_rejects_known_non_full_block_materials(material: str) -> None:
@@ -146,6 +172,36 @@ def test_full_block_surface_accepts_registered_full_cube_materials(material: str
     )
 
     assert roof.block_at((0, 1, 1)) == BlockState.parse(material)
+
+
+@pytest.mark.parametrize(
+    "material",
+    (
+        "minecraft:unregistered_stairs",
+        "minecraft:oak_stairs[shape=invalid]",
+        "minecraft:stone_bricks[unknown=true]",
+        "example:stone_bricks",
+    ),
+)
+def test_roof_palette_rejects_block_states_outside_the_1_21_5_material_catalog(material: str) -> None:
+    generate = _builder("generate_roof_surface")
+    roles = dict(_palette().roles)
+    roles["roof_stair"] = material
+    with pytest.raises(ValueError, match="Minecraft Java 1.21.5"):
+        generate(
+            1,
+            7,
+            0,
+            RoofProfile(),
+            EaveProfile(
+                side_overhang=0,
+                gable_end_treatment="hard_gable",
+                gable_end_projection=0,
+                thickness=0,
+                layer_roles=(),
+            ),
+            MaterialPalette(roles),
+        )
 
 
 def test_roof_slab_band_uses_a_top_half_state() -> None:

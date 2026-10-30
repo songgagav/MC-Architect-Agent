@@ -69,6 +69,40 @@ def test_v3_schema_contains_profiles_provenance_and_parameter_groups() -> None:
     assert corridor.defaults["roof_profile"]["ridge_height"] == 1
 
 
+def test_corridor_v3_derives_bounds_from_its_length_width_and_eave_projections() -> None:
+    resolved = resolve_parameters(
+        "jiangnan.corridor",
+        {
+            "length": 13,
+            "width": 5,
+            "eave_profile": {"gable_end_projection": 2, "side_overhang": 1},
+            "derived": {"bounds_width": 17, "bounds_depth": 7},
+        },
+    )
+
+    assert resolved.derived_parameters["bounds_width"] == 17
+    assert resolved.derived_parameters["bounds_depth"] == 7
+
+
+def test_corridor_v2_bounds_keep_using_the_legacy_eaves_parameter() -> None:
+    resolved = resolve_parameters(
+        "jiangnan.corridor",
+        {"length": 13, "width": 5, "eaves": 1},
+        schema_version=2,
+        asset_version=3,
+    )
+
+    assert resolved.derived_parameters["platform_length"] == 13
+
+
+def test_parameter_resolution_rejects_unregistered_target_block_states() -> None:
+    with pytest.raises(ValueError, match="Minecraft Java 1.21.5"):
+        resolve_parameters(
+            "jiangnan.hall",
+            {"material_palette": {"roof_stair": "minecraft:unregistered_stairs"}},
+        )
+
+
 def test_three_versioned_roof_presets_are_available_as_typed_values() -> None:
     list_roof_presets = getattr(parameter_registry, "list_roof_presets")
     load_roof_preset = getattr(parameter_registry, "load_roof_preset")
