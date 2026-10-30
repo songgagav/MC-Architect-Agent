@@ -192,27 +192,28 @@
 **Files:**
 - Modify: `jiangnan_agent/generators/hall.py`
 - Modify: `jiangnan_agent/assembly/adapters.py`
-- Modify: `jiangnan_agent/assets/factory.py`
+- Modify: `jiangnan_agent/generators/facade_profiles.py`
+- Modify: `jiangnan_agent/generators/facade_components.py`
 - Modify: `tests/test_hall.py`
-- Modify: `tests/test_assembly_model.py`
-- Modify: `tests/test_project_generation.py`
+- Modify: `tests/test_facade_profiles.py`
 
 **Interfaces:**
 - With no `facade_profile`, `generate_hall()` and `generate_corridor()` use the exact legacy code path.
-- With a profile, hall resolves openings by explicit face/segment/offset, places wall and timber pieces through `BlockOwnershipMap`, and requires exactly one front-facing `primary_entry`.
+- With a profile, hall resolves openings by explicit face/segment/offset and places walls, openings and timber detail through `BlockOwnershipMap`; only explicitly enabled frame/base/capital/beam cells can replace their declared owners.
 - `hall_module()` computes the existing `front` anchor from the primary opening specification, never by scanning all door states. `through_passage` creates the existing rear opening/anchor from the same primary opening.
-- Corridor accepts explicit enclosure/profile settings without changing its no-profile open gallery output or start/end anchors.
+- Corridor accepts explicit `enclosed_faces` and opening/profile settings. Only front/rear long sides may be enclosed; left/right connection ends remain open and `start`/`end` anchors stay stable.
 
-- [ ] **Write failing assembly integration tests first**
+- [x] **Write failing assembly integration tests first**
   - Lock current defaults before adding profile behavior: hall 522 blocks, bounds `min=(-1,0,-1)`, `max-exclusive=(17,10,8)`, SHA-256 `af86496dad80003d609d31a98e24a50957da419d32ca39a9ca622e8e61bc41b3`; corridor 150 blocks, bounds `min=(-1,0,-1)`, `max-exclusive=(12,7,4)`, SHA-256 `6b99402a56bb31b35e6209d64a8ac4f4f83b3b452171ea53a39bd6b1aef0d707`.
   - Test multiple front doors with only the stable `primary_entry` supplying `front`; move it and assert the existing anchor name and exact coordinates update.
   - Test `through_passage` front/rear anchors remain paired to the primary opening; nonconnecting openings add no anchors.
   - Test side windows resolve against actual side-post segments, walls of thickness 2 respect inside/outside direction, and roof/post/passage/anchor clearances reject conflict.
   - Test corridor profile enclosure preserves `start`/`end` anchors and open-gallery preset remains open.
-- [ ] Run tests and confirm they fail against door scanning and current single-material walls.
-- [ ] Implement opt-in hall/corridor profile integration and strict ownership merge; keep legacy `None` path byte-identical.
-- [ ] Run focused hall/assembly tests and assert old hashes remain identical.
-- [ ] Commit the hall/corridor integration: `feat: integrate façade profiles with buildings`.
+- [x] Add checks for explicit timber bases/capitals/beam layers, wall-opening protection, thickness direction, and roof-profile combination.
+- [x] Run tests and confirm they fail against door scanning and current single-material walls.
+- [x] Implement opt-in hall/corridor profile integration and strict ownership merge; keep legacy `None` path byte-identical.
+- [x] Run focused hall/assembly tests and assert old hashes remain identical.
+- [x] Commit the hall/corridor integration: `feat: integrate façade profiles with buildings`.
 
 ### Task 5: Register v4 schemas, v5 assets, sources, and style presets
 

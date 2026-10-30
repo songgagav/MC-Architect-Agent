@@ -20,9 +20,19 @@ from .components import (
     generate_window,
 )
 from .facade_profiles import (
+    FacadeOpening,
     FacadeProfile,
     facade_profile_from_mapping,
     validate_facade_profile_for_hall,
+)
+from .facade_components import facade_frame_positions, generate_facade_door, generate_facade_window
+from .facade_geometry import (
+    BlockOwnershipMap,
+    FaceSegmentBounds,
+    OpeningMask,
+    build_facade_segments,
+    face_basis,
+    resolve_facade_opening,
 )
 from .roof_profiles import (
     EaveProfile,
@@ -285,6 +295,15 @@ class CorridorParameters:
         normalized_materials = _checked_materials(self.materials, DEFAULT_CORRIDOR_MATERIALS)
         _validate_facade_legacy_conflicts(self.facade_profile, materials=normalized_materials)
         _validate_palette_aliases(normalized_materials, self.material_palette)
+        if self.facade_profile is not None:
+            closed_ends = set(self.facade_profile.enclosed_faces) & {"left", "right"}
+            if closed_ends:
+                raise ValueError("corridor facade cannot enclose start/end connection faces")
+            missing_faces = {opening.face for opening in self.facade_profile.openings} - set(
+                self.facade_profile.enclosed_faces
+            )
+            if missing_faces:
+                raise ValueError("corridor openings require their face to be listed in enclosed_faces")
         object.__setattr__(self, "roof_rise", roof_rise)
         object.__setattr__(self, "eaves", eaves)
         object.__setattr__(self, "materials", normalized_materials)
@@ -373,12 +392,272 @@ def _validate_palette_aliases(
             raise ValueError(f"materials.{legacy_role} conflicts with material_palette.{palette_role}")
 
 
-def generate_hall(parameters: HallParameters | None = None) -> VoxelModel:
+def _hall_face_segments(parameters: HallParameters) -> dict[str, tuple[FaceSegmentBounds, ...]]:
+    width = parameters.bay_count * parameters.bay_width + 1
+    depth = parameters.depth
+    wall_base_y = parameters.plinth_height + 1
+    beam_y = parameters.plinth_height + parameters.column_height
+    bay_posts = tuple(range(0, width, parameters.bay_width))
+    side_posts = tuple(sorted(set(range(0, depth - 1, parameters.bay_width)) | {depth - 1}))
+    bounds = {
+        "front": BoundingBox(0, wall_base_y, depth - 1, width, beam_y, depth),
+        "rear": BoundingBox(0, wall_base_y, 0, width, beam_y, 1),
+        "left": BoundingBox(0, wall_base_y, 0, 1, beam_y, depth),
+        "right": BoundingBox(width - 1, wall_base_y, 0, width, beam_y, depth),
+    }
+    return {
+        "front": build_facade_segments("front", bounds["front"], bay_posts),
+        "rear": build_facade_segments("rear", bounds["rear"], bay_posts),
+        "left": build_facade_segments("left", bounds["left"], side_posts),
+        "right": build_facade_segments("right", bounds["right"], side_posts),
+    }
+
+
+def _resolve_profile_openings(
+    profile: FacadeProfile,
+    segments: Mapping[str, tuple[FaceSegmentBounds, ...]],
+) -> list[tuple[FacadeOpening, BoundingBox]]:
+    result: list[tuple[FacadeOpening, BoundingBox]] = []
+    for opening in profile.openings:
+        segment = next(
+            (item for item in segments[opening.face] if item.segment_index == opening.segment_index),
+            None,
+        )
+        if segment is None:
+            raise ValueError(
+                f"opening {opening.opening_id!r} references missing {opening.face} segment {opening.segment_index}"
+            )
+        component = profile.door if opening.kind == "door" else profile.window
+        bounds = resolve_facade_opening(
+            opening,
+            segment,
+            width=component.width,
+            height=component.height,
+        )
+        result.append((opening, bounds))
+    return result
+
+
+def resolve_hall_primary_entry(parameters: HallParameters) -> BoundingBox:
+    """Resolve the selected hall entry to its exact face-local block bounds."""
+
+    if not isinstance(parameters, HallParameters) or parameters.facade_profile is None:
+        raise ValueError("hall parameters must contain a façade profile")
+    primary = validate_facade_profile_for_hall(parameters.facade_profile)
+    resolved = _resolve_profile_openings(parameters.facade_profile, _hall_face_segments(parameters))
+    return next(bounds for opening, bounds in resolved if opening.opening_id == primary.opening_id)
+
+
+def _merge_wall_panels(destination: VoxelModel, source: VoxelModel) -> None:
+    for position, state in sorted(source.blocks.items()):
+        current = destination.blocks.get(position)
+        if current is not None and current != state:
+            raise ValueError(f"overlapping façade walls use conflicting materials at {position}")
+        if current is None:
+            destination.set_block(position, state)
+
+
+def _axis_aligned_material(material: BlockState, axis: str) -> BlockState:
+    path = material.block_id.rsplit(":", 1)[-1]
+    if path.endswith(("_log", "_wood", "_stem", "_hyphae")) or "axis" in dict(material.properties):
+        properties = dict(material.properties)
+        properties["axis"] = axis
+        return BlockState(material.block_id, tuple(properties.items()))
+    return material
+
+
+def _generate_profiled_facades(
+    model: VoxelModel,
+    profile: FacadeProfile,
+    segments: Mapping[str, tuple[FaceSegmentBounds, ...]],
+    materials: Mapping[str, BlockState],
+    *,
+    faces: tuple[str, ...],
+    column_positions: tuple[tuple[int, int], ...],
+    column_base_y: int,
+    column_top_y: int,
+    through_passage: bool = False,
+) -> None:
+    openings = _resolve_profile_openings(profile, segments)
+    if any(opening.face not in faces for opening, _bounds in openings):
+        raise ValueError("façade opening references a face that is not enclosed")
+    primary = validate_facade_profile_for_hall(profile) if through_passage else None
+    if primary is not None:
+        rear_opening = FacadeOpening(
+            primary.opening_id,
+            "rear",
+            "door",
+            "non_connecting",
+            primary.segment_index,
+            primary.offset,
+            primary.sill_offset,
+        )
+        rear_segment = next(
+            (item for item in segments["rear"] if item.segment_index == rear_opening.segment_index),
+            None,
+        )
+        if rear_segment is None:
+            raise ValueError("primary entry has no matching rear wall segment for through_passage")
+        rear_bounds = resolve_facade_opening(
+            rear_opening,
+            rear_segment,
+            width=profile.door.width,
+            height=profile.door.height,
+        )
+        openings.append((rear_opening, rear_bounds))
+
+    opening_mask = OpeningMask()
+    for opening, bounds in openings:
+        opening_mask.reserve(opening.opening_id, opening.kind, bounds)
+
+    facade_materials = {role: BlockState.parse(state) for role, state in DEFAULT_HALL_MATERIALS.items()}
+    facade_materials.update(materials)
+    facade_materials.update({role: BlockState.parse(value) for role, value in profile.materials.items()})
+
+    timber = profile.timber
+    if not timber.exterior_posts:
+        raise ValueError("exterior structural posts cannot be hidden in façade profile v1")
+    timber_cells: set[tuple[int, int, int]] = set()
+    if timber.column_bases:
+        timber_cells.update((x, column_base_y, z) for x, z in column_positions)
+    if timber.column_capitals:
+        timber_cells.update((x, column_top_y, z) for x, z in column_positions)
+    if timber.beam_layers > 1 and faces:
+        panel_height = min(segment.bounds.size[1] for face in faces for segment in segments[face])
+        if timber.beam_layers > panel_height + 1:
+            raise ValueError("timber beam_layers exceed the available wall height")
+    if timber_cells or timber.beam_layers > 1:
+        if timber.trim_material_role not in facade_materials:
+            raise ValueError(f"missing façade material role {timber.trim_material_role!r}")
+    trim_material = facade_materials.get(timber.trim_material_role)
+
+    wall_model = VoxelModel()
+    for face in faces:
+        for segment in segments[face]:
+            segment_openings = [
+                bounds
+                for opening, bounds in openings
+                if opening.face == face and opening.segment_index == segment.segment_index
+            ]
+            panel = generate_wall(
+                segment.bounds,
+                facade_materials,
+                segment_openings,
+                profile=profile.wall,
+                face=face,
+                opening_mask=opening_mask,
+            )
+            _merge_wall_panels(wall_model, panel)
+
+    ownership = BlockOwnershipMap(opening_mask=opening_mask)
+    structure_claims = []
+    for position in sorted(model.blocks):
+        options: dict[str, object] = {"protected": position not in timber_cells}
+        if position in timber_cells:
+            options["replaceable_by"] = ("timber",)
+        structure_claims.append((position, "structure", options))
+    ownership.claim_batch(structure_claims)
+    ownership.merge(wall_model, "wall")
+    _merge(model, wall_model)
+
+    if timber_cells:
+        assert trim_material is not None
+        timber_model = VoxelModel()
+        timber_claims = []
+        for x, y, z in sorted(timber_cells):
+            state = _axis_aligned_material(trim_material, "y")
+            timber_model.set_block((x, y, z), state)
+            timber_claims.append(((x, y, z), "timber", {"replaces": "structure"}))
+        ownership.claim_batch(timber_claims)
+        _merge(model, timber_model)
+
+    if timber.beam_layers > 1:
+        assert trim_material is not None
+        beam_model = VoxelModel()
+        beam_claims = []
+        for layer in range(1, timber.beam_layers):
+            for face in faces:
+                basis = face_basis(face)
+                normal_axis = 2 if basis.tangent_axis == 0 else 0
+                for segment in segments[face]:
+                    y = segment.bounds.max_y - layer
+                    if y < segment.bounds.min_y:
+                        raise ValueError("timber beam_layers exceed the available wall height")
+                    start_values = [segment.bounds.min_x, y, segment.bounds.min_z]
+                    end_values = [segment.bounds.max_x - 1, y, segment.bounds.max_z - 1]
+                    start = tuple(start_values)
+                    end = tuple(end_values)
+                    if start[normal_axis] != end[normal_axis]:
+                        raise ValueError("timber beam layer segment must be one block thick")
+                    generated = VoxelModel()
+                    if start == end:
+                        axis = "x" if basis.tangent_axis == 0 else "z"
+                        generated.set_block(start, _axis_aligned_material(trim_material, axis))
+                    else:
+                        generated = generate_beam(
+                            start,
+                            end,
+                            trim_material,
+                        )
+                    for position, state in sorted(generated.blocks.items()):
+                        reservation = opening_mask.reservation_at(position)
+                        if reservation is not None:
+                            raise ValueError(
+                                f"timber beam layer overlaps reserved opening {reservation.opening_id!r} at {position}"
+                            )
+                        if ownership.owner_at(position) != "wall":
+                            raise ValueError(f"timber beam layer overlaps protected structure at {position}")
+                        ownership.allow_replacement(position, "timber")
+                        if position in beam_model.blocks:
+                            raise ValueError(f"timber beam layers overlap at {position}")
+                        beam_model.set_block(position, state)
+                        beam_claims.append((position, "timber", {"replaces": "wall"}))
+        ownership.claim_batch(beam_claims)
+        _merge(model, beam_model)
+
+    for opening, bounds in openings:
+        component_profile = profile.door if opening.kind == "door" else profile.window
+        origin = (bounds.min_x, bounds.min_y, bounds.min_z)
+        for position in facade_frame_positions(origin, component_profile, opening.face):
+            if ownership.owner_at(position) == "wall":
+                ownership.allow_replacement(position, "frame")
+        if opening.kind == "door":
+            component = generate_facade_door(
+                origin,
+                profile.door,
+                opening.face,
+                ownership,
+                opening_mask,
+                opening_id=opening.opening_id,
+                materials=facade_materials,
+            )
+        else:
+            component = generate_facade_window(
+                origin,
+                profile.window,
+                opening.face,
+                ownership,
+                opening_mask,
+                opening_id=opening.opening_id,
+                materials=facade_materials,
+            )
+        _merge(model, component)
+
+
+def generate_hall(
+    parameters: HallParameters | None = None,
+    *,
+    through_passage: bool = False,
+) -> VoxelModel:
     """Assemble a parameterized hall with a centered door and a gable roof."""
 
     parameters = parameters or HallParameters()
     if not isinstance(parameters, HallParameters):
         raise ValueError("parameters must be HallParameters")
+    if not isinstance(through_passage, bool):
+        raise ValueError("through_passage must be a boolean")
+    if through_passage and parameters.facade_profile is None:
+        raise ValueError("through_passage generation requires an explicit façade profile")
     materials = _resolve_materials(parameters.materials, DEFAULT_HALL_MATERIALS)
     width = parameters.bay_count * parameters.bay_width + 1
     depth = parameters.depth
@@ -415,6 +694,27 @@ def generate_hall(parameters: HallParameters | None = None) -> VoxelModel:
         _merge(model, generate_beam((0, beam_y, z), (width - 1, beam_y, z), materials["beam"]))
     for x in (0, width - 1):
         _merge(model, generate_beam((x, beam_y, 0), (x, beam_y, front_z), materials["beam"]))
+
+    if parameters.facade_profile is not None:
+        _generate_profiled_facades(
+            model,
+            parameters.facade_profile,
+            _hall_face_segments(parameters),
+            materials,
+            faces=("front", "rear", "left", "right"),
+            column_positions=tuple(sorted(post_positions)),
+            column_base_y=plinth_top_y,
+            column_top_y=beam_y - 1,
+            through_passage=through_passage,
+        )
+        _merge_roof(
+            model,
+            _roof_model(width, depth, roof_base_y, parameters, materials),
+            beam_y=beam_y,
+            width=width,
+            depth=depth,
+        )
+        return model
 
     center_bay = parameters.bay_count // 2
     door_x = center_bay * parameters.bay_width + 1 + (parameters.bay_width - 1 - parameters.door_width) // 2
@@ -503,4 +803,33 @@ def generate_corridor(parameters: CorridorParameters | None = None) -> VoxelMode
         width=parameters.length,
         depth=parameters.width,
     )
+    if parameters.facade_profile is not None:
+        wall_base_y = 2
+        beam_y = 1 + parameters.column_height
+        post_x_positions = tuple(
+            sorted(set(range(0, parameters.length, parameters.column_spacing)) | {parameters.length - 1})
+        )
+        post_z_positions = (0, parameters.width - 1)
+        face_bounds = {
+            "front": BoundingBox(0, wall_base_y, parameters.width - 1, parameters.length, beam_y, parameters.width),
+            "rear": BoundingBox(0, wall_base_y, 0, parameters.length, beam_y, 1),
+            "left": BoundingBox(0, wall_base_y, 0, 1, beam_y, parameters.width),
+            "right": BoundingBox(parameters.length - 1, wall_base_y, 0, parameters.length, beam_y, parameters.width),
+        }
+        segments = {
+            "front": build_facade_segments("front", face_bounds["front"], post_x_positions),
+            "rear": build_facade_segments("rear", face_bounds["rear"], post_x_positions),
+            "left": build_facade_segments("left", face_bounds["left"], post_z_positions),
+            "right": build_facade_segments("right", face_bounds["right"], post_z_positions),
+        }
+        _generate_profiled_facades(
+            model,
+            parameters.facade_profile,
+            segments,
+            materials,
+            faces=parameters.facade_profile.enclosed_faces,
+            column_positions=tuple((x, z) for x in post_x_positions for z in post_z_positions),
+            column_base_y=1,
+            column_top_y=beam_y - 1,
+        )
     return model

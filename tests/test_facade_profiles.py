@@ -52,6 +52,7 @@ def _profile(*, openings: tuple[FacadeOpening, ...] | None = None) -> FacadeProf
         timber=TimberDetailProfile(exterior_posts=True, beam_layers=2),
         openings=(_primary(),) if openings is None else openings,
         materials={"wall": "white_terracotta", "wall_inner": "minecraft:calcite"},
+        enclosed_faces=("rear", "front"),
     )
 
 
@@ -101,6 +102,14 @@ def test_profile_rejects_duplicate_opening_ids() -> None:
 
     with pytest.raises(ValueError, match="unique"):
         _profile(openings=(first, duplicate))
+
+
+def test_profile_normalizes_and_validates_enclosed_faces() -> None:
+    assert _profile().enclosed_faces == ("front", "rear")
+    with pytest.raises(ValueError, match="enclosed_faces"):
+        FacadeProfile(profile_id="duplicate-faces", enclosed_faces=("front", "front"))
+    with pytest.raises(ValueError, match="enclosed_faces"):
+        FacadeProfile(profile_id="invalid-face", enclosed_faces=("roof",))
 
 
 @pytest.mark.parametrize(

@@ -9,6 +9,7 @@ from ..core.block import BlockState
 from ..core.geometry import BoundingBox
 from ..core.scene import AIR
 from ..generators.components import generate_door
+from ..generators.facade_profiles import facade_profile_to_mapping
 from ..generators.hall import (
     CorridorParameters,
     DEFAULT_CORRIDOR_MATERIALS,
@@ -16,6 +17,7 @@ from ..generators.hall import (
     HallParameters,
     generate_corridor,
     generate_hall,
+    resolve_hall_primary_entry,
 )
 from ..generators.roof_profiles import MaterialPalette
 from .model import ClearanceZone, ConnectionAnchor, Module
@@ -36,6 +38,8 @@ def _parameters_dict(parameters, defaults: Mapping[str, str]) -> dict[str, objec
                 materials.pop("roof", None)
                 materials.pop("eaves", None)
             values[item.name] = materials
+        elif item.name == "facade_profile" and value is not None:
+            values[item.name] = facade_profile_to_mapping(value)
         elif item.name in {"roof_profile", "eave_profile", "ridge_profile", "material_palette"}:
             if value is None:
                 continue
@@ -72,32 +76,28 @@ def hall_module(
     """Wrap a generated hall with explicit front, and optional rear, door anchors."""
 
     parameters = parameters or HallParameters()
-    model = generate_hall(parameters)
-    lower_doors = [
-        (position, state)
-        for position, state in model.blocks.items()
-        if state.block_id.endswith("_door") and dict(state.properties).get("half") == "lower"
-    ]
-    if not lower_doors:
-        raise ValueError("generated hall has no lower door blocks to anchor")
-    door_y = min(position[1] for position, _state in lower_doors)
-    front_z = max(position[2] for position, _state in lower_doors)
-    front_doors = [(position, state) for position, state in lower_doors if position[2] == front_z]
-    x_positions = sorted(position[0] for position, _state in front_doors)
-    door_x, door_width = x_positions[0], len(x_positions)
+    if parameters.facade_profile is not None:
+        model = generate_hall(parameters, through_passage=through_passage)
+        primary_bounds = resolve_hall_primary_entry(parameters)
+        door_x = primary_bounds.min_x
+        door_y = primary_bounds.min_y
+        door_width = primary_bounds.size[0]
+        opening_height = primary_bounds.size[1]
+        front_z = primary_bounds.min_z
+    else:
+        model = generate_hall(parameters)
+        door_width = parameters.door_width
+        door_x = (
+            parameters.bay_count // 2 * parameters.bay_width
+            + 1
+            + (parameters.bay_width - 1 - door_width) // 2
+        )
+        door_y = parameters.plinth_height + 1
+        opening_height = 2
+        front_z = parameters.depth - 1
+    x_positions = list(range(door_x, door_x + door_width))
     center_x = door_x + door_width // 2
-    front_state = front_doors[0][1]
-    front_facing = dict(front_state.properties).get("facing")
-    if front_facing not in _OPPOSITE:
-        raise ValueError("generated hall door has no cardinal facing")
-    door_heights = {
-        position[1]
-        for position, state in model.blocks.items()
-        if state.block_id == front_state.block_id
-        and position[0] in x_positions
-        and position[2] == front_z
-    }
-    opening_height = len(door_heights)
+    front_facing = "south"
     anchors = [
         ConnectionAnchor(
             "front",
@@ -121,30 +121,22 @@ def hall_module(
         )
 
     if through_passage:
-        back_candidates = [
-            position[2]
-            for position, state in model.blocks.items()
-            if position[0] in x_positions
-            and position[1] == door_y
-            and position[2] < front_z
-            and state != AIR
-        ]
-        if not back_candidates:
-            raise ValueError("generated hall has no rear wall cells for a passage")
-        back_z = min(back_candidates)
-        for x in x_positions:
-            for y in range(door_y, door_y + opening_height):
-                model.set_block((x, y, back_z), AIR)
-        rear_model = generate_door(
-            door_x,
-            door_y,
-            back_z,
-            door_width,
-            front_state.block_id,
-            _OPPOSITE[front_facing],
-        )
-        for position, state in rear_model.blocks.items():
-            model.set_block(position, state)
+        back_z = 0
+        if parameters.facade_profile is None:
+            for x in x_positions:
+                for y in range(door_y, door_y + opening_height):
+                    model.set_block((x, y, back_z), AIR)
+            door_material = (parameters.materials or {}).get("door", DEFAULT_HALL_MATERIALS["door"])
+            rear_model = generate_door(
+                door_x,
+                door_y,
+                back_z,
+                door_width,
+                door_material,
+                _OPPOSITE[front_facing],
+            )
+            for position, state in rear_model.blocks.items():
+                model.set_block(position, state)
         anchors.append(
             ConnectionAnchor(
                 "rear",

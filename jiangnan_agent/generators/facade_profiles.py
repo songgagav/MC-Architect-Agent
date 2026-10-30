@@ -187,6 +187,7 @@ class FacadeProfile:
     timber: TimberDetailProfile = TimberDetailProfile()
     openings: tuple[FacadeOpening, ...] = ()
     materials: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
+    enclosed_faces: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.profile_id, str) or not self.profile_id.strip():
@@ -209,6 +210,11 @@ class FacadeProfile:
         ids = tuple(opening.opening_id for opening in openings)
         if len(ids) != len(set(ids)):
             raise ValueError("opening_id values must be unique within a façade profile")
+        if not isinstance(self.enclosed_faces, (tuple, list)):
+            raise ValueError("enclosed_faces must be an array of face names")
+        enclosed_faces = tuple(_enum(face, "enclosed_faces", _FACES) for face in self.enclosed_faces)
+        if len(enclosed_faces) != len(set(enclosed_faces)):
+            raise ValueError("enclosed_faces values must be unique")
         if not isinstance(self.materials, Mapping):
             raise ValueError("materials must be a mapping of roles to Minecraft block states")
         materials: dict[str, str] = {}
@@ -224,6 +230,7 @@ class FacadeProfile:
         object.__setattr__(self, "version", version)
         object.__setattr__(self, "openings", openings)
         object.__setattr__(self, "materials", MappingProxyType(materials))
+        object.__setattr__(self, "enclosed_faces", tuple(sorted(enclosed_faces)))
 
 
 def validate_facade_profile_for_hall(profile: FacadeProfile) -> FacadeOpening:
@@ -365,6 +372,7 @@ def facade_profile_to_mapping(profile: FacadeProfile) -> dict[str, object]:
         "timber": timber_detail_profile_to_mapping(profile.timber),
         "openings": [facade_opening_to_mapping(opening) for opening in profile.openings],
         "materials": dict(sorted(profile.materials.items())),
+        "enclosed_faces": list(profile.enclosed_faces),
     }
 
 
@@ -372,7 +380,17 @@ def facade_profile_from_mapping(value: object) -> FacadeProfile:
     config = _profile_mapping(
         value,
         "facade_profile",
-        {"profile_id", "version", "wall", "door", "window", "timber", "openings", "materials"},
+        {
+            "profile_id",
+            "version",
+            "wall",
+            "door",
+            "window",
+            "timber",
+            "openings",
+            "materials",
+            "enclosed_faces",
+        },
     )
     if "profile_id" not in config:
         raise ValueError("facade_profile is missing required field 'profile_id'")
@@ -391,6 +409,7 @@ def facade_profile_from_mapping(value: object) -> FacadeProfile:
         timber=timber_detail_profile_from_mapping(config.get("timber", {})),
         openings=tuple(facade_opening_from_mapping(item) for item in openings),
         materials=materials,
+        enclosed_faces=config.get("enclosed_faces", ()),  # type: ignore[arg-type]
     )
 
 

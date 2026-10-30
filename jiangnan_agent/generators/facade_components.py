@@ -102,6 +102,46 @@ def _component_claims(
     ownership.claim_batch(claims)
 
 
+def _frame_layout(
+    origin: Position,
+    profile: DoorProfile | WindowProfile,
+    face: str,
+) -> tuple[tuple[Position, str, str], ...]:
+    if face not in _FACING_BY_FACE:
+        raise ValueError("face must be front, rear, left, or right")
+    axis = "x" if face in {"front", "rear"} else "z"
+    layout: dict[Position, tuple[str, str]] = {}
+    if isinstance(profile, DoorProfile):
+        for layer in range(profile.frame_thickness):
+            for tangent_offset in (-1 - layer, profile.width + layer):
+                for y_offset in range(profile.height):
+                    layout[_point(origin, face, tangent_offset, y_offset)] = (profile.frame_material_role, "y")
+        if profile.lintel:
+            for tangent_offset in range(-profile.frame_thickness, profile.width + profile.frame_thickness):
+                layout[_point(origin, face, tangent_offset, profile.height)] = (profile.lintel_material_role, axis)
+    elif isinstance(profile, WindowProfile):
+        for layer in range(profile.frame_thickness):
+            for tangent_offset in (-1 - layer, profile.width + layer):
+                for y_offset in range(profile.height):
+                    layout[_point(origin, face, tangent_offset, y_offset)] = (profile.frame_material_role, "y")
+            for tangent_offset in range(-1 - layer, profile.width + 1 + layer):
+                for y_offset in (-1 - layer, profile.height + layer):
+                    layout[_point(origin, face, tangent_offset, y_offset)] = (profile.frame_material_role, axis)
+    else:
+        raise ValueError("profile must be a DoorProfile or WindowProfile")
+    return tuple((position, role, orientation) for position, (role, orientation) in sorted(layout.items()))
+
+
+def facade_frame_positions(
+    origin: Position,
+    profile: DoorProfile | WindowProfile,
+    face: str,
+) -> frozenset[Position]:
+    """Return exactly the cells occupied by the profile's jambs and lintels."""
+
+    return frozenset(position for position, _role, _axis in _frame_layout(_origin(origin), profile, face))
+
+
 def _door_hinge(face: str, offset: int, width: int) -> str:
     facing = _FACING_BY_FACE[face]
     tangent = [0, 0, 0]
@@ -161,20 +201,9 @@ def generate_facade_door(
             _append_unique(door_model, _point(origin, face, offset, y_offset), state)
 
     frame_model = VoxelModel()
-    if profile.frame_thickness:
-        frame_material = _material(materials, profile.frame_material_role)
-        for layer in range(profile.frame_thickness):
-            for tangent_offset in (-1 - layer, profile.width + layer):
-                jamb = _wood_axis(frame_material, "y")
-                for y_offset in range(profile.height):
-                    _append_unique(frame_model, _point(origin, face, tangent_offset, y_offset), jamb)
-    if profile.lintel:
-        axis = "x" if face in {"front", "rear"} else "z"
-        lintel_material = _wood_axis(_material(materials, profile.lintel_material_role), axis)
-        start = -profile.frame_thickness
-        end = profile.width + profile.frame_thickness
-        for tangent_offset in range(start, end):
-            _append_unique(frame_model, _point(origin, face, tangent_offset, profile.height), lintel_material)
+    for position, role, axis in _frame_layout(origin, profile, face):
+        frame_material = _wood_axis(_material(materials, role), axis)
+        _append_unique(frame_model, position, frame_material)
 
     combined = VoxelModel()
     for source in (door_model, frame_model):
@@ -275,7 +304,6 @@ def generate_facade_window(
         lattice_path = lattice.block_id.rsplit(":", 1)[-1]
         if not lattice_path.endswith(("_pane", "_bars", "_fence")):
             raise ValueError("lattice material must be a pane, bars, or fence block")
-    frame_material = _material(materials, profile.frame_material_role) if profile.frame_thickness else None
     window_model = VoxelModel()
     for y_offset in range(profile.height):
         for tangent_offset in range(profile.width):
@@ -291,17 +319,9 @@ def generate_facade_window(
             _append_unique(window_model, _point(origin, face, tangent_offset, y_offset), state)
 
     frame_model = VoxelModel()
-    if frame_material is not None:
-        thickness = profile.frame_thickness
-        for layer in range(thickness):
-            jamb = _wood_axis(frame_material, "y")
-            for tangent_offset in (-1 - layer, profile.width + layer):
-                for y_offset in range(profile.height):
-                    _append_unique(frame_model, _point(origin, face, tangent_offset, y_offset), jamb)
-            lintel = _wood_axis(frame_material, "x" if face in {"front", "rear"} else "z")
-            for tangent_offset in range(-1 - layer, profile.width + 1 + layer):
-                for y_offset in (-1 - layer, profile.height + layer):
-                    _append_unique(frame_model, _point(origin, face, tangent_offset, y_offset), lintel)
+    for position, role, axis in _frame_layout(origin, profile, face):
+        frame_material = _wood_axis(_material(materials, role), axis)
+        _append_unique(frame_model, position, frame_material)
 
     combined = VoxelModel()
     for source in (window_model, frame_model):

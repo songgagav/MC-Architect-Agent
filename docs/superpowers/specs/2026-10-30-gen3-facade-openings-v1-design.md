@@ -54,12 +54,13 @@
 
 - 新增 typed `WallPanelProfile`、`DoorProfile`、`WindowProfile`、`TimberDetailProfile`、`FacadeOpening`，并以一个可序列化的 `FacadeProfile` 组合它们。配置材料角色使用完整 BlockState，并校验方块和方向属性。每个 `FacadeOpening` 有稳定 `opening_id` 和连接用途标识（`primary_entry` 或 `non_connecting`）；hall 必须恰有一个 `primary_entry`，不得通过扫描所有门方块推断连接锚点。
 - `generate_wall` 在保留现有位置参数和默认行为的基础上接受可选 Profile。墙体厚度沿其 X 或 Z 法向展开；层序、墙面材料、局部装饰由 Profile 决定。每一层保留同一开口掩码，装饰不得填入开口或通行空间。
+- `FacadeProfile.enclosed_faces` 只用于 corridor 的显式围护；首版仅允许围护 front/rear 长边，left/right 端面保持开放以保护既有 `start`/`end` 连接锚点。开口只能放在明确列入 `enclosed_faces` 的立面。
 - Door Profile 至少支持 1 格单扇门和 2 格双扇门、门框及门楣。Window Profile 支持普通窗、离散木格窗与少量装饰花窗样式，并配置宽、高、窗框厚度及材料。
 - 立面局部坐标统一为 X 沿正面从左至右增加、Y 向上、Z 从 rear 向 front 增加；front/rear/left/right 的朝外法线分别为 +Z/-Z/-X/+X。front/rear 按 X 向开间索引定位；left/right 按实际侧柱间段或局部 Z 坐标定位，不复用 `bay_count`。
 - hall 使用显式 `facade_profile` 控制门、窗、墙层和木构细节；旧 `door_width` 与旧材料配置仍可读。`FacadeOpening` 以稳定 ID、立面、开间/柱间段索引或局部坐标、段内偏移和门槛/窗台偏移定位；未给出布局时，显式 Profile 沿用当前中门与两侧正面窗的规则。主入口位置变化后，以该 opening 的实际位置重新计算现有 `front` 锚点坐标；锚点名称及模块连接接口保持不变。`through_passage` 仍从同一主入口派生既有 `rear` 锚点；首版不允许其他开口新增连接锚点，其他开口只能标记为 `non_connecting`。必要时以省略哨兵区分旧参数是否显式给出，冲突必须报错。
 - corridor 仅在显式 Profile 下生成指定围护面；`garden_open_gallery` 保持通透，默认无 Profile 时仍生成当前开敞廊架。
 - `WallPanelProfile` 明确厚度层从立面参考层沿 `inward` 或 `outward` 扩展；单层默认保持当前占格。Profile 不授予整面墙的替换权；`BlockOwnershipMap` 只对逐格明确授权的墙块开放替换。验证扩厚后与柱梁、屋檐、门窗、Assembly 净空和连接区的关系。
-- 墙、门窗、柱梁和装饰之间使用方块所有权及开口保留掩码。门窗和装饰只能替换 Profile 明确声明可替换的墙体格；结构格、通行格和未声明占格冲突受保护或显式报错，不依靠生成顺序静默覆盖。木构 Profile 只补充外露柱梁、柱础/柱头、简单梁枋层次及墙木收边。
+- 墙、门窗、柱梁和装饰之间使用方块所有权及开口保留掩码。门窗和装饰只能替换 Profile 明确声明可替换的墙体格；结构格、通行格和未声明占格冲突受保护或显式报错，不依靠生成顺序静默覆盖。木构 Profile 保留既有外露结构柱，在明确启用时只替换柱础/柱头对应的端部方块，并在柱间墙顶添加梁枋层次；这些占格同样通过逐格所有权和开口掩码检查。
 - 新建 Profile 经过现有旋转/镜像流程时，仅允许已支持的方块状态；不支持的属性变换报错。
 
 ### 3. 预设和示例
@@ -76,6 +77,7 @@ DB-2 候选构件不会被读取为这些配置的事实或模板。Task 0 的�
 
 - 资产发现与 SQLite 查询返回同一最新 hall/corridor 版本、Schema 版本和锚点；旧版本可显式查询，计划模块仍被正确过滤；既有 DB-1/DB-2 记录不丢失。
 - hall/corridor 无 `facade_profile` 时默认方块哈希与既有版本完全一致；所有 typed Profile 均有确定性的 JSON 编解码，旧 `door_width`、`materials` 与新 Profile 仅在双方显式给出时检查冲突。旧工程和固定资产快照保持原样。
+- typed `FacadeProfile.enclosed_faces` 为兼容性可选字段；旧 JSON 缺省时解码为空数组。hall 的四面围护仍由其既有建筑类型决定，corridor 只生成显式列出的 front/rear 长边。
 - 覆盖 3/5 开间 hall、多个正面门、唯一主入口移动后的 `front` 锚点更新、侧面开窗、按实际柱间段定位、墙体加厚与扩展方向、直廊围护、单/双门、普通窗/木格窗/花窗、X/Z 立面方向、开口掩码、材料状态、格窗旋转/镜像、装饰冲突、屋顶组合、ProjectEditor 撤销/重做及结构/通行/连接净空冲突。
 - 覆盖参数 Schema 兼容、资产版本、项目保存/重载、局部编辑、撤销/重做、Assembly 与 `generate` 优先级、MCP 回归、Sponge v3 导出与回读。
 - Task 0 的三个屋顶预设各有可编辑工程、Schematic 和 top/front/side/perspective 四张渲染；GEN-3 三组完整建筑各有 Blender 四视图，并留存人工视觉审查记录。
