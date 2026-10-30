@@ -8,6 +8,23 @@ from types import MappingProxyType
 
 Position3 = tuple[int, int, int]
 Bounds3 = tuple[Position3, Position3]
+CoordinateRun = tuple[int, int, int, int]
+
+SEMANTIC_COMPONENT_TYPES = (
+    "roof_surface",
+    "roof_ridge",
+    "eaves",
+    "column",
+    "beam",
+    "wall",
+    "door",
+    "window",
+    "floor",
+    "foundation",
+    "railing",
+    "decoration",
+    "unknown",
+)
 
 _AIR_STATES = frozenset({"minecraft:air", "minecraft:cave_air", "minecraft:void_air"})
 
@@ -182,3 +199,101 @@ class ReferenceAsset:
         object.__setattr__(self, "block_palette", MappingProxyType(dict(self.block_palette)))
         object.__setattr__(self, "provenance", MappingProxyType(dict(self.provenance)))
         object.__setattr__(self, "usage_rights", MappingProxyType(dict(self.usage_rights)))
+
+
+@dataclass(frozen=True)
+class SemanticAnnotation:
+    annotation_id: str
+    revision: int
+    asset_id: str
+    asset_version: int
+    region_name: str
+    component_type: str
+    geometry_type: str
+    geometry: Mapping[str, object]
+    source_kind: str
+    rule_id: str | None
+    confidence: float | None
+    status: str
+    reviewer: str | None
+    reviewed_at: str | None
+    review_note: str | None
+    created_at: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "geometry", MappingProxyType(dict(self.geometry)))
+
+
+@dataclass(frozen=True)
+class ComponentSummary:
+    region_name: str
+    component_type: str
+    local_origin: Position3
+    dimensions: Position3
+    bounding_box: Bounds3
+    block_count: int
+    block_states: Mapping[str, int]
+    materials: Mapping[str, int]
+    layer_materials: Mapping[int, Mapping[str, int]]
+    coordinate_runs: tuple[CoordinateRun, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "block_states", MappingProxyType(dict(self.block_states)))
+        object.__setattr__(self, "materials", MappingProxyType(dict(self.materials)))
+        object.__setattr__(
+            self,
+            "layer_materials",
+            MappingProxyType({key: MappingProxyType(dict(value)) for key, value in self.layer_materials.items()}),
+        )
+
+
+@dataclass(frozen=True)
+class ReferenceComponent:
+    component_id: str
+    version: int
+    source_asset_id: str
+    source_asset_version: int
+    annotation_id: str
+    annotation_revision: int
+    name: str
+    component_type: str
+    region_name: str
+    local_origin: Position3
+    dimensions: Position3
+    bounding_box: Bounds3
+    block_count: int
+    block_states: Mapping[str, int]
+    materials: Mapping[str, int]
+    layer_materials: Mapping[int, Mapping[str, int]]
+    coordinate_runs: tuple[CoordinateRun, ...]
+    style_tags: tuple[str, ...]
+    component_status: str
+    parameterization_status: str
+    created_at: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "block_states", MappingProxyType(dict(self.block_states)))
+        object.__setattr__(self, "materials", MappingProxyType(dict(self.materials)))
+        object.__setattr__(
+            self,
+            "layer_materials",
+            MappingProxyType({key: MappingProxyType(dict(value)) for key, value in self.layer_materials.items()}),
+        )
+
+
+@dataclass(frozen=True)
+class StyleAnalysis:
+    analysis_id: str
+    revision: int
+    profile_id: str
+    profile_version: int
+    status: str
+    source_assets: tuple[tuple[str, int], ...]
+    analysis: Mapping[str, object]
+    reviewer: str | None
+    reviewed_at: str | None
+    review_note: str | None
+    created_at: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "analysis", MappingProxyType(dict(self.analysis)))
