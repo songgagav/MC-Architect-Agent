@@ -400,9 +400,16 @@ def generate_roof_surface(
     for (z, height, band, state), (next_z, next_height, next_band, next_state) in zip(rows, rows[1:]):
         if next_z != z + 1 or next_height == height:
             continue
-        if band.form != "full_block" and next_band.form != "full_block":
+        if band.form == "full_block":
+            fill_state = state
+        elif next_band.form == "full_block":
+            fill_state = next_state
+        elif band.form == "slab":
+            fill_state = _state_with(state, type="double", waterlogged="false")
+        elif next_band.form == "slab":
+            fill_state = _state_with(next_state, type="double", waterlogged="false")
+        else:
             continue
-        fill_state = state if band.form == "full_block" else next_state
         fill_position_y = base_y + (next_height if next_height > height else height)
         fill_position_z = z if next_height > height else next_z
         for x in range(x_start, x_end):

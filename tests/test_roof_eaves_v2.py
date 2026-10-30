@@ -115,6 +115,44 @@ def test_full_block_bands_fill_each_one_block_roof_slope_transition() -> None:
 
 
 @pytest.mark.parametrize(
+    ("bands", "bridge_positions"),
+    (
+        (
+            (SurfaceBand(0, 1000, "slab", "roof_slab"),),
+            ((0, 11, 0), (0, 12, 1), (0, 12, 3), (0, 11, 4)),
+        ),
+        (
+            (
+                SurfaceBand(0, 500, "slab", "roof_slab"),
+                SurfaceBand(500, 1000, "stair", "roof_stair"),
+            ),
+            ((0, 11, 0), (0, 11, 4)),
+        ),
+    ),
+    ids=("slab-slope", "slab-stair-boundaries"),
+)
+def test_slab_transitions_use_double_slab_bridges(bands, bridge_positions) -> None:
+    generate = _builder("generate_roof_surface")
+    roof = generate(
+        1,
+        5,
+        10,
+        RoofProfile(ridge_height=2, surface_bands=bands),
+        EaveProfile(
+            side_overhang=0,
+            gable_end_treatment="hard_gable",
+            gable_end_projection=0,
+            thickness=0,
+            layer_roles=(),
+        ),
+        _palette(),
+    )
+
+    bridge = BlockState.parse("minecraft:stone_brick_slab[type=double,waterlogged=false]")
+    assert all(roof.block_at(position) == bridge for position in bridge_positions)
+
+
+@pytest.mark.parametrize(
     "material",
     (
         "minecraft:glass_pane",
@@ -149,6 +187,7 @@ def test_full_block_surface_rejects_known_non_full_block_materials(material: str
     (
         "minecraft:sea_lantern",
         "minecraft:glass",
+        "minecraft:cobblestone",
         "minecraft:stone_brick_slab[type=double,waterlogged=false]",
     ),
 )

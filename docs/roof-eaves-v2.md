@@ -32,7 +32,7 @@ minecraft:stone_brick_slab[type=bottom,waterlogged=false]
 
 这些是 Minecraft 创作配置。预设名称仅为视觉风格标签，不代表已经核实的地域归属或历史构造。可以在加载后调整参数，也可以和其他模块参数组合。
 
-屋顶生成使用 `jiangnan_agent/generators/minecraft_materials.py` 中的版本化建筑材质子集校验所有材料角色的方块 ID 和状态属性。该清单只包含当前屋顶引擎支持的 Minecraft Java 1.21.5 建筑材质，并非游戏完整注册表；未知 ID、属性或状态值会失败关闭。坡面使用整块材料时，单格高度过渡会填充连接方块，保证体素相邻连续。
+屋顶生成使用 `jiangnan_agent/generators/minecraft_materials.py` 中的版本化建筑材质子集校验所有材料角色的方块 ID 和状态属性。该清单只包含当前屋顶引擎支持的 Minecraft Java 1.21.5 建筑材质，并非游戏完整注册表；未知 ID、属性或状态值会失败关闭。坡面使用整块或半砖材料时，单格高度过渡会填充连接方块（半砖过渡使用双层半砖），避免表面只在棱角接触。
 
 ## 创建并生成一座使用预设的厅堂
 

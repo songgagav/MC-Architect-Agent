@@ -66,7 +66,7 @@ Schema v3 片段（完整厅堂、直廊 JSON 位于 `jiangnan_agent/parameters/
 }
 ```
 
-屋顶参数组包括：`roof_profile`（屋脊抬高值、归一化坡面断面及材料分段）、`eave_profile`（两侧出檐、山墙端处理、分层檐口和可选重复装饰）、`ridge_profile`（可选盖脊和重复装饰）、`material_palette`（语义角色到完整 Minecraft BlockState 的映射）。坡面材料分段引用 Palette 中的角色；当构件需要新的角色时，Palette 可以增加非空角色名。生成前会用项目维护的 Minecraft Java 1.21.5 建筑材质子集校验每个 Palette 方块 ID 和已登记状态属性；此子集不是游戏全部方块注册表，未登记项会明确报错。`full_block` 只接受登记为整块的材质或 `type=double` 的半砖。斜面高度发生一级变化且相邻分段包含整块表面时，生成器会填充过渡方块，避免只在棱角接触而留下空隙。
+屋顶参数组包括：`roof_profile`（屋脊抬高值、归一化坡面断面及材料分段）、`eave_profile`（两侧出檐、山墙端处理、分层檐口和可选重复装饰）、`ridge_profile`（可选盖脊和重复装饰）、`material_palette`（语义角色到完整 Minecraft BlockState 的映射）。坡面材料分段引用 Palette 中的角色；当构件需要新的角色时，Palette 可以增加非空角色名。生成前会用项目维护的 Minecraft Java 1.21.5 建筑材质子集校验每个 Palette 方块 ID 和已登记状态属性；此子集不是游戏全部方块注册表，未登记项会明确报错。`full_block` 只接受登记为整块的材质或 `type=double` 的半砖。斜面高度发生一级变化且相邻分段包含整块或半砖表面时，生成器会填充连接方块；整块使用整块材质，半砖过渡使用双层半砖，避免只在棱角接触而留下空隙。
 
 版本化 Minecraft 创作预设包括 `jiangnan_dark_tile`、`gray_brick_layered` 和 `warm_spruce_garden`。可从 `jiangnan_agent.parameters` 调用 `list_roof_presets()` 和 `load_roof_preset(preset_id)` 查询、加载。参数保存在 `jiangnan_agent/parameters/v3/roof_profiles.json`；应用预设后修改得到的值仍是明确输入，可确定性生成。
 
