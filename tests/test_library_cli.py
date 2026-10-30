@@ -34,6 +34,28 @@ def test_library_cli_initializes_and_lists_regions(tmp_path, monkeypatch, capsys
     assert sources and all(source["registry_version"] == 4 for source in sources)
 
 
+def test_library_cli_lists_current_module_asset_versions(tmp_path, monkeypatch, capsys) -> None:
+    database = tmp_path / "library.sqlite3"
+    monkeypatch.setattr(
+        "sys.argv",
+        ["jiangnan", "library", "init", "--database", str(database)],
+    )
+    assert main() == 0
+    capsys.readouterr()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["jiangnan", "library", "list", "modules", "--database", str(database)],
+    )
+    assert main() == 0
+    modules = json.loads(capsys.readouterr().out)
+
+    for asset_id in ("jiangnan.hall", "jiangnan.corridor"):
+        current = [module for module in modules if module["asset_id"] == asset_id]
+        assert len(current) == 1
+        assert current[0]["asset_version"] == 4
+
+
 def test_library_backup_does_not_create_a_database_as_a_side_effect(tmp_path, monkeypatch, capsys) -> None:
     database = tmp_path / "missing.sqlite3"
     backup = tmp_path / "backup.sqlite3"

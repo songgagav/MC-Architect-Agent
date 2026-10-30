@@ -10,6 +10,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
+from ..assets.registry import AssetSpec, list_assets
 from ..knowledge import KnowledgeBase, load_knowledge_base
 from .database import LibraryDatabase
 from .errors import AssetIntegrityError, LibraryLookupError, LitematicFormatError
@@ -149,11 +150,14 @@ class LibraryService:
 
     def _synchronize_catalogs(self) -> None:
         knowledge = load_knowledge_base()
-        module_catalog_path = Path(__file__).parent / "catalog" / "v1" / "modules.json"
+        library_root = Path(__file__).parent
+        module_catalog_path = _latest_versioned_json(library_root / "catalog", "modules.json", "module catalog")
         module_catalog = _read_json(module_catalog_path)
         module_records = module_catalog.get("modules")
         if not isinstance(module_records, list):
             raise ValueError(f"module catalog has no modules array: {module_catalog_path}")
+        asset_catalog_path = _latest_versioned_json(_PACKAGE_ROOT / "jiangnan_agent" / "assets", "assets.json", "asset registry")
+        asset_module_records = [_module_record_from_asset(asset, asset_catalog_path) for asset in list_assets()]
         style_files = sorted((Path(__file__).parent / "styles" / "v1").glob("*.json"))
         parameter_files = sorted((Path(__file__).parent / "parameters").glob("v*/*.json"))
         style_records = [_read_json(path) | {"_definition_path": _relative_record_path(path)} for path in style_files]
@@ -162,9 +166,60 @@ class LibraryService:
             self._upsert_knowledge(connection, knowledge)
             for schema, path in parameter_records:
                 self._upsert_parameter_schema(connection, schema, path)
+            for record in asset_module_records:
+                self._upsert_asset_registry_module(connection, record)
             self._upsert_module_catalog(connection, module_records)
             for style in style_records:
                 self._upsert_style(connection, style)
+
+    def _upsert_asset_registry_module(self, connection: sqlite3.Connection, record: Mapping[str, Any]) -> None:
+        asset_id = _nonempty(record.get("asset_id"), "module asset_id")
+        version = _positive_int(record.get("version"), "module version")
+        existing = connection.execute(
+            "SELECT * FROM module_assets WHERE asset_id = ? AND version = ?",
+            (asset_id, version),
+        ).fetchone()
+        if existing is not None:
+            stored = _loads(existing["record_json"])
+            current = self._module_record(connection, existing)
+            stable_fields = (
+                "asset_id",
+                "version",
+                "kind",
+                "knowledge_base_version",
+                "generator_source_id",
+                "parameter_schema_id",
+                "parameter_schema_version",
+                "region_association_kind",
+                "region_ids",
+                "anchor_interfaces",
+                "knowledge_rule_ids",
+            )
+            database_values = {
+                "asset_id": current["asset_id"],
+                "version": current["asset_version"],
+                "kind": current["kind"],
+                "generator_source_id": current["generator_source_id"],
+                "parameter_schema_id": current["parameter_schema_id"],
+                "parameter_schema_version": current["parameter_schema_version"],
+                "region_association_kind": current["region_association_kind"],
+                "region_ids": current["regions"],
+                "anchor_interfaces": current["anchor_interfaces"],
+                "knowledge_rule_ids": current["knowledge_rule_ids"],
+            }
+            conflicts = [
+                name
+                for name in stable_fields
+                if stored.get(name) != record.get(name)
+                or (name in database_values and database_values[name] != record.get(name))
+            ]
+            if conflicts:
+                raise ValueError(
+                    f"Python asset registry conflicts with stored module {asset_id!r} version {version}: "
+                    f"{', '.join(conflicts)}"
+                )
+            return
+        self._upsert_module_catalog(connection, [record])
 
     def _upsert_knowledge(self, connection: sqlite3.Connection, knowledge: KnowledgeBase) -> None:
         region_records = [
@@ -1621,11 +1676,21 @@ class LibraryService:
             ).fetchall()
             return tuple(_loads(row["record_json"]) for row in rows)
 
-    def list_modules(self, *, include_planned: bool = False) -> tuple[dict[str, Any], ...]:
-        query = "SELECT * FROM module_assets"
+    def list_modules(
+        self, *, include_planned: bool = False, include_versions: bool = False
+    ) -> tuple[dict[str, Any], ...]:
+        conditions: list[str] = []
+        if not include_versions:
+            conditions.append(
+                "version = (SELECT MAX(latest.version) FROM module_assets AS latest "
+                "WHERE latest.asset_id = module_assets.asset_id)"
+            )
         if not include_planned:
-            query += " WHERE status = 'implemented'"
-        query += " ORDER BY kind"
+            conditions.append("status = 'implemented'")
+        query = "SELECT * FROM module_assets"
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY kind, asset_id, version"
         with self.database.connection() as connection:
             rows = connection.execute(query).fetchall()
             return tuple(self._module_record(connection, row) for row in rows)
@@ -2129,6 +2194,47 @@ def _read_json(path: Path) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError(f"JSON record must be an object: {path}")
     return raw
+
+
+def _latest_versioned_json(directory: Path, filename: str, label: str) -> Path:
+    versioned_paths: list[tuple[int, Path]] = []
+    for path in directory.glob(f"v*/{filename}"):
+        version_name = path.parent.name
+        if not version_name.startswith("v"):
+            continue
+        try:
+            version = int(version_name[1:])
+        except ValueError:
+            continue
+        if version > 0:
+            versioned_paths.append((version, path))
+    if not versioned_paths:
+        raise ValueError(f"no versioned {label} found in {directory}")
+    return max(versioned_paths, key=lambda item: item[0])[1]
+
+
+def _module_record_from_asset(asset: AssetSpec, asset_catalog_path: Path) -> dict[str, Any]:
+    return {
+        "asset_id": asset.asset_id,
+        "version": asset.version,
+        "kind": asset.kind,
+        "status": "implemented",
+        "knowledge_base_version": asset.knowledge_base_version,
+        "generator_source_id": asset.source_id,
+        "source_id": asset.source_id,
+        "parameter_schema_id": asset.parameter_schema_id,
+        "parameter_schema_version": asset.parameter_schema_version,
+        "definition_path": _relative_record_path(asset_catalog_path),
+        "region_association_kind": asset.region_association_kind,
+        "region_association_note": asset.region_association_note,
+        "region_ids": list(asset.region_ids),
+        "anchor_interfaces": list(asset.anchor_interfaces),
+        "dependencies": [],
+        "preview_files": [],
+        "knowledge_rule_ids": list(asset.knowledge_rule_ids),
+        "minecraft_version": asset.minecraft_version,
+        "notes": asset.region_association_note or "Versioned Python Asset Registry entry.",
+    }
 
 
 def _json(value: object) -> str:
