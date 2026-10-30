@@ -113,6 +113,38 @@ jiangnan generate --project examples\three_bay_hall.jap.json
 
 可复现的三开间参数样例见 `examples/hall_v1_parameters.json`（为兼容演示而固定 asset v2/schema v1）。`bay_spacing` 映射到现有参数 `bay_width`；当前屋顶断面仅支持生成器实现的对称双坡。新参数的来源类别和模块资产示例见 [`docs/parameter-registry.md`](docs/parameter-registry.md)；地域范围、来源核查等级和待核查记录见 [`docs/knowledge-regions.md`](docs/knowledge-regions.md)。用户 `.litematic` 只登记为视觉偏好参考，不作为历史证据。
 
+## 本地建筑参考库（DB-1）
+
+SQLite 参考库索引知识来源、地域规则、模块定义、参数 schema、风格预设以及用户本地的投影文件统计。工程 JSON 仍是可编辑工程的唯一快照；参考库不会替代工程、改写生成器或向工程/世界写入方块。默认数据库是被 Git 忽略的 `workspace\library\architect_library.sqlite3`；原始 `.litematic` 和预览图继续留在文件系统。
+
+```powershell
+jiangnan library init
+jiangnan library import "Template\芳堂-茯茯角.litematic" --asset-id reference.fangtang --name "芳堂-茯茯角" --building-type hall
+jiangnan library import "Template\流苏坊框架-茯茯角.litematic" --asset-id reference.liusufang-frame --name "流苏坊框架-茯茯角" --building-type frame
+jiangnan library previews reference.fangtang `
+  --file workspace\previews\template-reference-20261029\fangtang_front.png `
+  --file workspace\previews\template-reference-20261029\fangtang_side.png
+jiangnan library list references
+jiangnan library materials reference.fangtang
+jiangnan library list regions
+jiangnan library list sources
+jiangnan library list rules --region huizhou_core
+jiangnan library list parameters
+jiangnan library parameter minecraft_building_design
+jiangnan library module jiangnan.hall
+jiangnan library style jiangnan_mc_classic
+jiangnan library verify
+jiangnan library backup --output workspace\library\backup-2026-10-30.sqlite3
+```
+
+知识来源/规则/地域目录与模块、参数、风格 JSON 是可审阅的版本化定义；SQLite 使用迁移版本 3 保存索引、关系和投影材料/高度层聚合。初始化和重复导入具有幂等性；若同一资产 ID 对应文件内容发生变化，会登记下一个资产版本。`library verify` 检查原始投影 SHA-256 和已登记预览文件是否仍存在。备份数据库时也要单独备份原始投影与预览图，因为 SQLite 不复制这些外部大文件。
+
+`minecraft_building_design@1` 参数登记表覆盖整体尺寸、开间与柱网、屋顶断面、檐口、材料、门窗比例、装饰密度、参考资产和模块连接约束。每项标记为当前生成器支持、部分支持、仅风格建议或规划字段。它不扩展现有生成器：例如屋脊轮廓、翘角、屋面层次和装饰密度保留空默认值并标为未实现；历史文献、测绘、参考投影统计、用户输入、派生值和 Minecraft 创作适配分别标记来源类别。
+
+导入器只读解析 Litematica NBT，保留源文件、区域正负尺寸、坐标、方块状态及原始 SHA-256；数据库只存材料和 Y 层统计，不逐方块建表。当前已登记的两份本地模板 DataVersion 均为 3465，低于项目目标 1.21.5 / DataVersion 4325；状态会标为“需复核”，不会自动升级方块或声称已在目标版本实机验证。其区域归属保持未核查。`jiangnan_mc_classic` 与 `huizhou_mc_classic` 是可覆盖的 Minecraft 视觉创作预设；材料候选来自实际投影频次，屋顶/墙体语义没有可靠分类时仍标记未核查。作者元数据为 `Paper_Angle`，授权未知，默认不授予再分发权。
+
+完整 Schema、表关系、备份步骤、导入数字和待验事项见 [`docs/library-db-1.md`](docs/library-db-1.md)。
+
 ## 三维预览与修改对比
 
 `jiangnan preview` 调用 Mine2Blend 将 Sponge `.schem` 转成 OBJ，再用 Blender 后台渲染俯视、正面、侧面和透视图。需要本机安装 Mine2Blend 和 Blender；输出目录必须为空或尚不存在，程序不会覆盖已有预览。
