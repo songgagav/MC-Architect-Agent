@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import asdict
+
 import pytest
 
-from jiangnan_agent.assets import list_assets
+from jiangnan_agent.assets import list_assets, module_from_asset
 from jiangnan_agent.generators.roof_profiles import EaveProfile, RidgeProfile, RoofProfile
 from jiangnan_agent.knowledge import load_knowledge_base
 from jiangnan_agent.parameters import (
@@ -89,6 +91,21 @@ def test_three_versioned_roof_presets_are_available_as_typed_values() -> None:
     assert warm.ridge_profile.cap_height == 0
     for preset_id in ("jiangnan_dark_tile", "gray_brick_layered", "warm_spruce_garden"):
         assert load_roof_preset(preset_id).material_palette.roles
+
+
+def test_each_creative_roof_preset_generates_repeatably() -> None:
+    for preset_id in ("jiangnan_dark_tile", "gray_brick_layered", "warm_spruce_garden"):
+        preset = parameter_registry.load_roof_preset(preset_id)
+        parameters = {
+            "roof_profile": asdict(preset.roof_profile),
+            "eave_profile": asdict(preset.eave_profile),
+            "ridge_profile": asdict(preset.ridge_profile),
+            "material_palette": dict(preset.material_palette.roles),
+        }
+        first = module_from_asset(f"hall-{preset_id}", "jiangnan.hall", parameters)
+        second = module_from_asset(f"hall-{preset_id}", "jiangnan.hall", parameters)
+        assert first.model.blocks
+        assert first.model.blocks == second.model.blocks
 
 
 def test_legacy_roof_values_normalize_to_canonical_profile_fields() -> None:
