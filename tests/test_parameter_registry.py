@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict
+from pathlib import Path
 
 import pytest
 
@@ -15,19 +17,162 @@ from jiangnan_agent.parameters import (
 from jiangnan_agent.parameters import registry as parameter_registry
 
 
-def test_current_asset_catalog_v4_keeps_pinned_versions_readable() -> None:
+def test_current_asset_catalog_v5_keeps_pinned_versions_readable() -> None:
     by_kind = {asset.kind: asset for asset in list_assets()}
 
-    assert {kind: asset.version for kind, asset in by_kind.items()} == {"hall": 4, "corridor": 4}
-    assert all(asset.parameter_schema_version == 3 for asset in by_kind.values())
-    assert all(asset.knowledge_base_version == 4 for asset in by_kind.values())
+    assert {kind: asset.version for kind, asset in by_kind.items()} == {"hall": 5, "corridor": 5}
+    assert all(asset.parameter_schema_version == 4 for asset in by_kind.values())
+    assert all(asset.knowledge_base_version == 5 for asset in by_kind.values())
     assert {asset.version for asset in list_assets(version=3)} == {1, 2, 3}
     assert {asset.version for asset in list_assets(version=4)} == {1, 2, 3, 4}
-    assert tuple(asset for asset in list_assets(version=4) if asset.version <= 3) == list_assets(version=3)
-    for asset_version, schema_version in ((1, 1), (2, 1), (3, 2), (4, 3)):
+    assert {asset.version for asset in list_assets(version=5)} == {1, 2, 3, 4, 5}
+    assert tuple(asset for asset in list_assets(version=5) if asset.version <= 4) == list_assets(version=4)
+    for asset_version, schema_version in ((1, 1), (2, 1), (3, 2), (4, 3), (5, 4)):
         for asset_id in ("jiangnan.hall", "jiangnan.corridor"):
             schema = load_parameter_schema(asset_id, asset_version=asset_version)
             assert schema.version == schema_version
+
+
+def test_v5_asset_catalog_registers_facade_profiles_without_mutating_older_versions() -> None:
+    from jiangnan_agent.assets.registry import get_asset
+    from jiangnan_agent.assets import module_from_asset
+    from test_roof_eaves_v2 import _canonical_hash
+
+    hall_v4 = get_asset("jiangnan.hall", 4, catalog_version=4)
+    hall_v5 = get_asset("jiangnan.hall", 5)
+    corridor_v4 = get_asset("jiangnan.corridor", 4, catalog_version=4)
+    corridor_v5 = get_asset("jiangnan.corridor", 5)
+
+    assert (hall_v4.parameter_schema_version, hall_v4.knowledge_base_version) == (3, 4)
+    assert (corridor_v4.parameter_schema_version, corridor_v4.knowledge_base_version) == (3, 4)
+    assert (hall_v5.parameter_schema_version, hall_v5.knowledge_base_version) == (4, 5)
+    assert (corridor_v5.parameter_schema_version, corridor_v5.knowledge_base_version) == (4, 5)
+    assert load_parameter_schema("jiangnan.hall").version == 4
+    assert load_parameter_schema("jiangnan.corridor").version == 4
+    for asset_id in ("jiangnan.hall", "jiangnan.corridor"):
+        current = module_from_asset(f"{asset_id}-v5", asset_id)
+        previous = module_from_asset(f"{asset_id}-v4", asset_id, asset_version=4)
+        assert current.model.blocks == previous.model.blocks
+        assert _canonical_hash(current.model) == _canonical_hash(previous.model)
+
+
+def test_facade_profile_schema_round_trips_typed_profiles_and_preserves_legacy_defaults() -> None:
+    from jiangnan_agent.assets import module_from_asset
+    from jiangnan_agent.generators.facade_profiles import (
+        FacadeProfile,
+        encode_facade_profile,
+        facade_profile_from_mapping,
+        facade_profile_to_mapping,
+    )
+
+    profile = {
+        "profile_id": "schema-test",
+        "version": 1,
+        "openings": [
+            {
+                "opening_id": "main-entry",
+                "face": "front",
+                "kind": "door",
+                "connection_use": "primary_entry",
+                "segment_index": 1,
+                "offset": 1,
+                "sill_offset": 0,
+            }
+        ],
+    }
+    resolved = resolve_parameters("jiangnan.hall", {"facade_profile": profile})
+    module = module_from_asset("profiled", "jiangnan.hall", {"facade_profile": profile})
+    legacy = module_from_asset("legacy", "jiangnan.hall", asset_version=4)
+    from jiangnan_agent.assembly.adapters import hall_module
+    from jiangnan_agent.generators.hall import HallParameters
+
+    assert isinstance(resolved.normalized_inputs["facade_profile"], Mapping)
+    assert isinstance(resolved.generator_parameters.facade_profile, FacadeProfile)
+    assert facade_profile_from_mapping(module.parameters["facade_profile"]) == resolved.generator_parameters.facade_profile
+    assert legacy.model.blocks == hall_module("legacy-direct", HallParameters()).model.blocks
+    encoded = encode_facade_profile(resolved.generator_parameters.facade_profile)
+    assert resolve_parameters("jiangnan.hall", {"facade_profile": encoded}).generator_parameters.facade_profile == (
+        resolved.generator_parameters.facade_profile
+    )
+    assert facade_profile_to_mapping(resolved.generator_parameters.facade_profile) == profile | {
+        "wall": {"thickness": 1, "expand_direction": "inward", "layer_roles": ["wall"]},
+        "door": {
+            "width": 2, "height": 2, "frame_thickness": 0, "door_material_role": "door",
+            "frame_material_role": "column", "lintel_material_role": "beam", "lintel": True,
+        },
+        "window": {
+            "width": 2, "height": 2, "sill_height": 2, "frame_thickness": 1,
+            "frame_material_role": "beam", "glazing_material_role": "window",
+            "lattice_material_role": "lattice", "lattice_style": "plain",
+        },
+        "timber": {
+            "exterior_posts": True, "column_bases": False, "column_capitals": False,
+            "beam_layers": 1, "trim_material_role": "beam",
+        },
+        "materials": {},
+        "enclosed_faces": [],
+    }
+
+
+def test_facade_profile_conflicts_only_with_explicit_legacy_inputs() -> None:
+    from jiangnan_agent.generators.facade_profiles import facade_profile_to_mapping
+
+    profile = facade_profile_to_mapping(parameter_registry.load_facade_preset("jiangnan_whitewall_timber"))
+    resolve_parameters("jiangnan.hall", {"facade_profile": profile})
+
+    with pytest.raises(ValueError, match="explicit door_width conflicts"):
+        resolve_parameters("jiangnan.hall", {"facade_profile": profile, "door_width": 1})
+    with pytest.raises(ValueError, match="explicit materials role 'wall' conflicts"):
+        resolve_parameters(
+            "jiangnan.hall",
+            {"facade_profile": profile, "materials": {"wall": "minecraft:stone"}},
+        )
+    with pytest.raises(ValueError, match="explicit materials role 'wall' conflicts"):
+        resolve_parameters(
+            "jiangnan.hall",
+            {"facade_profile": profile},
+            base_config={"materials": {"wall": "minecraft:stone"}},
+            base_provenance={"materials": {"category": "user_input"}},
+        )
+
+
+def test_facade_presets_are_versioned_creative_configs_combinable_with_roof_presets(tmp_path: Path) -> None:
+    from jiangnan_agent.library import LibraryService
+    from jiangnan_agent.library.database import LibraryDatabase
+    from jiangnan_agent.generators.facade_profiles import facade_profile_to_mapping
+    from jiangnan_agent.parameters import load_facade_preset, list_facade_presets
+
+    assert list_facade_presets() == (
+        "garden_open_gallery",
+        "huizhou_graybrick_entry",
+        "jiangnan_whitewall_timber",
+    )
+    service = LibraryService(LibraryDatabase(tmp_path / "catalog.sqlite3"))
+    service.initialize()
+    assert set(item["profile_id"] for item in service.list_styles()) >= {
+        "jiangnan_whitewall_timber",
+        "huizhou_graybrick_entry",
+        "garden_open_gallery",
+    }
+    listed_styles = {item["profile_id"]: item for item in service.list_styles()}
+    for facade_id in list_facade_presets():
+        style_record = service.get_style_profile(facade_id)
+        assert listed_styles[facade_id]["status"] == "ready"
+        assert style_record["facade_profile_id"] == facade_id
+        assert style_record["reference_asset_ids"] == []
+        for roof_id in parameter_registry.list_roof_presets():
+            facade = load_facade_preset(facade_id)
+            roof = parameter_registry.load_roof_preset(roof_id)
+            parameters = {
+                "facade_profile": facade_profile_to_mapping(facade),
+                "roof_profile": asdict(roof.roof_profile),
+                "eave_profile": asdict(roof.eave_profile),
+                "ridge_profile": asdict(roof.ridge_profile),
+                "material_palette": dict(roof.material_palette.roles),
+            }
+            first = module_from_asset("combined", "jiangnan.hall", parameters)
+            second = module_from_asset("combined", "jiangnan.hall", parameters)
+            assert first.model.blocks == second.model.blocks
 
 
 def test_v4_knowledge_adds_code_sources_without_enabling_new_regions() -> None:
@@ -67,6 +212,42 @@ def test_v3_schema_contains_profiles_provenance_and_parameter_groups() -> None:
     assert "roof_section.rise" in hall.legacy_aliases
     assert hall.defaults["roof_profile"]["ridge_height"] == 3
     assert corridor.defaults["roof_profile"]["ridge_height"] == 1
+
+
+def test_v4_accepts_versioned_edge_liner_profile_and_keeps_legacy_default() -> None:
+    schema = load_parameter_schema("jiangnan.hall")
+    assert schema.defaults["eave_profile"]["surface_connection"] == "legacy"
+    assert schema.defaults["eave_profile"]["surface_connection_role"] is None
+
+    resolved = resolve_parameters(
+        "jiangnan.hall",
+        {
+            "eave_profile": {
+                "side_overhang": 1,
+                "gable_end_treatment": "hard_gable",
+                "gable_end_projection": 0,
+                "thickness": 1,
+                "layer_roles": ["eaves"],
+                "surface_connection": "edge_liner",
+                "surface_connection_role": "edge_liner",
+            },
+            "material_palette": {
+                "roof_stair": "minecraft:stone_brick_stairs",
+                "eaves": "minecraft:stone_brick_slab[type=top,waterlogged=false]",
+                "edge_liner": "minecraft:stone_bricks",
+            },
+        },
+    )
+
+    assert resolved.generator_parameters.eave_profile == EaveProfile(
+        side_overhang=1,
+        gable_end_treatment="hard_gable",
+        gable_end_projection=0,
+        thickness=1,
+        layer_roles=("eaves",),
+        surface_connection="edge_liner",
+        surface_connection_role="edge_liner",
+    )
 
 
 def test_corridor_v3_derives_bounds_from_its_length_width_and_eave_projections() -> None:

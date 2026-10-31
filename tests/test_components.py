@@ -6,6 +6,7 @@ import pytest
 
 from jiangnan_agent.core.block import BlockState
 from jiangnan_agent.core.geometry import BoundingBox
+from jiangnan_agent.generators.facade_profiles import WallPanelProfile
 from jiangnan_agent.generators.components import (
     generate_beam,
     generate_column,
@@ -60,6 +61,23 @@ def test_wall_rejects_opening_outside_its_bounds() -> None:
             "minecraft:calcite",
             openings=(BoundingBox(2, 2, 0, 4, 4, 1),),
         )
+
+
+def test_single_layer_facade_wall_matches_legacy_wall_occupancy() -> None:
+    bounds = BoundingBox(0, 0, 0, 5, 4, 1)
+    opening = BoundingBox(2, 1, 0, 3, 3, 1)
+    profile = WallPanelProfile(thickness=1, expand_direction="inward", layer_roles=("wall",))
+
+    legacy = generate_wall(bounds, "minecraft:calcite", openings=(opening,))
+    profiled = generate_wall(
+        bounds,
+        "minecraft:calcite",
+        openings=(opening,),
+        profile=profile,
+        face="front",
+    )
+
+    assert profiled.blocks == legacy.blocks
 
 
 def test_plinth_fills_the_half_open_volume() -> None:

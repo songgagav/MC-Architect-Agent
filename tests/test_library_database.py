@@ -33,6 +33,9 @@ def test_database_migrations_and_catalog_seed_are_idempotent(tmp_path: Path) -> 
     assert set(item["profile_id"] for item in service.list_styles()) == {
         "jiangnan_mc_classic",
         "huizhou_mc_classic",
+        "jiangnan_whitewall_timber",
+        "huizhou_graybrick_entry",
+        "garden_open_gallery",
     }
     assert service.list_knowledge_rules(region="jiaxing_huzhou_water_towns")["rules"] == []
 
@@ -259,12 +262,12 @@ def test_module_catalog_tracks_parameter_schema_as_a_definition_not_instance(tmp
     service.initialize()
     hall = service.get_module_definition("jiangnan.hall")
 
-    assert hall["asset_version"] == 4
+    assert hall["asset_version"] == 5
     assert hall["parameter_schema_id"] == "hall"
-    assert hall["parameter_schema_version"] == 3
+    assert hall["parameter_schema_version"] == 4
     assert hall["parameter_schema"]["kind"] == "hall"
     assert "module_instance_id" not in hall
-    assert hall["knowledge_rule_ids"] == ["hui-village-layout-and-architecture"]
+    assert hall["knowledge_rule_ids"] == ["facade-profile-minecraft-creative-config"]
 
 
 def test_sqlite_module_catalog_matches_latest_python_asset_registry(tmp_path: Path) -> None:
@@ -275,7 +278,7 @@ def test_sqlite_module_catalog_matches_latest_python_asset_registry(tmp_path: Pa
         registered = get_asset(asset_id)
         module = service.get_module_definition(asset_id)
 
-        assert module["asset_version"] == registered.version == 4
+        assert module["asset_version"] == registered.version == 5
         assert module["kind"] == registered.kind
         assert module["parameter_schema_id"] == registered.parameter_schema_id
         assert module["parameter_schema_version"] == registered.parameter_schema_version
@@ -285,7 +288,7 @@ def test_sqlite_module_catalog_matches_latest_python_asset_registry(tmp_path: Pa
         assert module["knowledge_rule_ids"] == list(registered.knowledge_rule_ids)
 
 
-def test_module_catalog_preserves_v3_and_registers_v4(tmp_path: Path) -> None:
+def test_module_catalog_preserves_old_versions_and_registers_v5(tmp_path: Path) -> None:
     database = LibraryDatabase(tmp_path / "library.sqlite3")
     service = LibraryService(database, project_root=tmp_path)
     database.initialize()
@@ -321,6 +324,7 @@ def test_module_catalog_preserves_v3_and_registers_v4(tmp_path: Path) -> None:
     for asset_id in ("jiangnan.hall", "jiangnan.corridor"):
         assert service.get_module_definition(asset_id, version=3)["asset_version"] == 3
         assert service.get_module_definition(asset_id, version=4)["asset_version"] == 4
+        assert service.get_module_definition(asset_id, version=5)["asset_version"] == 5
 
 
 def test_list_modules_returns_latest_unless_versions_requested(tmp_path: Path) -> None:
@@ -330,16 +334,16 @@ def test_list_modules_returns_latest_unless_versions_requested(tmp_path: Path) -
     latest = service.list_modules(include_planned=True)
     assert [item["asset_id"] for item in latest].count("jiangnan.hall") == 1
     assert [item["asset_id"] for item in latest].count("jiangnan.corridor") == 1
-    assert service.get_module_definition("jiangnan.hall")["asset_version"] == 4
+    assert service.get_module_definition("jiangnan.hall")["asset_version"] == 5
     assert any(item["status"] == "planned" for item in latest)
 
     all_versions = service.list_modules(include_planned=True, include_versions=True)
     assert {
         item["asset_version"] for item in all_versions if item["asset_id"] == "jiangnan.hall"
-    } == {1, 2, 3, 4}
+    } == {1, 2, 3, 4, 5}
     assert {
         item["asset_version"] for item in all_versions if item["asset_id"] == "jiangnan.corridor"
-    } == {1, 2, 3, 4}
+    } == {1, 2, 3, 4, 5}
 
 
 def test_module_catalog_reports_conflicting_stable_registry_identity(tmp_path: Path) -> None:
@@ -475,10 +479,10 @@ def test_knowledge_registry_is_versioned_and_current_profile_queries_report_vers
         versions = connection.execute(
             "SELECT version, content_sha256 FROM knowledge_registry_versions ORDER BY version"
         ).fetchall()
-    assert [(int(row["version"]), len(row["content_sha256"])) for row in versions] == [(4, 64)]
-    assert all(region["registry_version"] == 4 for region in service.list_regions())
-    assert service.list_knowledge_rules(region="huizhou_core")["knowledge_base_version"] == 4
-    assert service.list_sources()[0]["registry_version"] == 4
+    assert [(int(row["version"]), len(row["content_sha256"])) for row in versions] == [(5, 64)]
+    assert all(region["registry_version"] == 5 for region in service.list_regions())
+    assert service.list_knowledge_rules(region="huizhou_core")["knowledge_base_version"] == 5
+    assert service.list_sources()[0]["registry_version"] == 5
 
 
 def test_database_foreign_keys_and_module_version_history_are_enforced(tmp_path: Path) -> None:
@@ -525,7 +529,7 @@ def test_database_upgrades_an_existing_v1_file_in_order(tmp_path: Path) -> None:
     service = LibraryService(LibraryDatabase(path), project_root=tmp_path)
 
     assert service.initialize() == 4
-    assert service.list_knowledge_rules(region="huizhou_core")["knowledge_base_version"] == 4
+    assert service.list_knowledge_rules(region="huizhou_core")["knowledge_base_version"] == 5
 
 
 def test_versioned_module_parameter_and_style_definitions_are_immutable(tmp_path: Path) -> None:
@@ -578,3 +582,20 @@ def test_versioned_module_parameter_and_style_definitions_are_immutable(tmp_path
     with pytest.raises(ValueError, match="style profile .*version 1 is immutable"):
         with service.database.transaction() as connection:
             service._upsert_style(connection, changed_style)
+
+
+def test_style_profile_must_reference_an_existing_versioned_facade_preset(tmp_path: Path) -> None:
+    service = LibraryService(LibraryDatabase(tmp_path / "library.sqlite3"), project_root=tmp_path)
+    service.initialize()
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "jiangnan_agent/library/styles/v2/jiangnan_whitewall_timber.json"
+    )
+    style = json.loads(path.read_text(encoding="utf-8"))
+    style["profile_id"] = "test.unknown-facade-reference"
+    style["facade_profile_id"] = "missing.facade-preset"
+    style["_definition_path"] = "styles/test-unknown-facade.json"
+
+    with pytest.raises(ValueError, match="unknown façade preset"):
+        with service.database.transaction() as connection:
+            service._upsert_style(connection, style)

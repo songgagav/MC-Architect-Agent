@@ -15,6 +15,7 @@ from jiangnan_agent.generators.roof_profiles import (
     RoofProfile,
     SurfaceBand,
 )
+from jiangnan_agent.generators.minecraft_materials import roof_material_shape
 from jiangnan_agent.io.schematic import read_schematic, write_schematic
 
 
@@ -393,6 +394,230 @@ def test_components_reject_a_missing_palette_role() -> None:
 def test_material_palette_rejects_air_that_would_remove_roof_cells() -> None:
     with pytest.raises(ValueError, match="air cannot be used as a roof material"):
         MaterialPalette({"roof_stair": "minecraft:air"})
+
+
+def _shape_boxes(state: BlockState) -> tuple[tuple[float, float, float, float, float, float], ...]:
+    """Small vanilla collision/render-shape model for roof contact assertions."""
+
+    properties = dict(state.properties)
+    shape = roof_material_shape(state)
+    if shape == "full":
+        return ((0, 0, 0, 1, 1, 1),)
+    if shape == "slab":
+        low, high = (0, 0.5) if properties.get("type") == "bottom" else (0.5, 1)
+        return ((0, low, 0, 1, high, 1),)
+    if shape == "stair":
+        facing = properties["facing"]
+        upper = {
+            "north": (0, 0.5, 0, 1, 1, 0.5),
+            "south": (0, 0.5, 0.5, 1, 1, 1),
+            "west": (0, 0.5, 0, 0.5, 1, 1),
+            "east": (0.5, 0.5, 0, 1, 1, 1),
+        }[facing]
+        return ((0, 0, 0, 1, 0.5, 1), upper)
+    raise AssertionError(f"unhandled roof shape {shape!r}")
+
+
+def _touching_area(
+    first: tuple[int, int, int],
+    first_box: tuple[float, float, float, float, float, float],
+    second: tuple[int, int, int],
+    second_box: tuple[float, float, float, float, float, float],
+) -> float:
+    """Return positive face-contact area for boxes in adjacent block cells."""
+
+    ax, ay, az = first
+    bx, by, bz = second
+    a0, a1, a2, a3, a4, a5 = first_box
+    b0, b1, b2, b3, b4, b5 = second_box
+    if az + 1 == bz and a5 == 1 and b2 == 0:
+        return max(0, min(ay + a4, by + b4) - max(ay + a1, by + b1)) * max(
+            0, min(ax + a3, bx + b3) - max(ax + a0, bx + b0)
+        )
+    if bz + 1 == az and b5 == 1 and a2 == 0:
+        return max(0, min(ay + a4, by + b4) - max(ay + a1, by + b1)) * max(
+            0, min(ax + a3, bx + b3) - max(ax + a0, bx + b0)
+        )
+    if ay + 1 == by and a4 == 1 and b1 == 0:
+        return max(0, min(ax + a3, bx + b3) - max(ax + a0, bx + b0)) * max(
+            0, min(az + a5, bz + b5) - max(az + a2, bz + b2)
+        )
+    if by + 1 == ay and b4 == 1 and a1 == 0:
+        return max(0, min(ax + a3, bx + b3) - max(ax + a0, bx + b0)) * max(
+            0, min(az + a5, bz + b5) - max(az + a2, bz + b2)
+        )
+    return 0
+
+
+@pytest.mark.parametrize(
+        ("width", "depth", "ridge_height", "side_overhang", "thickness", "section_points", "stair_state", "eave_state", "liner_state"),
+    [
+        (16, 7, 3, 1, 1, ((0, 0), (1000, 1000)), "minecraft:polished_deepslate_stairs", "minecraft:deepslate_tile_slab[type=top,waterlogged=false]", "minecraft:polished_deepslate"),
+        (26, 9, 2, 2, 2, ((0, 0), (333, 500), (667, 500), (1000, 1000)), "minecraft:stone_brick_stairs", "minecraft:stone_brick_slab[type=top,waterlogged=false]", "minecraft:stone_bricks"),
+        (18, 7, 2, 0, 1, ((0, 0), (1000, 1000)), "minecraft:stone_brick_stairs", "minecraft:stone_brick_slab[type=top,waterlogged=false]", "minecraft:stone_bricks"),
+    ],
+)
+def test_edge_liner_closes_eave_band_with_real_stair_and_slab_shapes(
+    width: int,
+    depth: int,
+    ridge_height: int,
+    side_overhang: int,
+    thickness: int,
+    section_points: tuple[tuple[int, int], ...],
+    stair_state: str,
+    eave_state: str,
+    liner_state: str,
+) -> None:
+    generate = _builder("generate_roof_components")
+    eave_roles = ("eaves",) * thickness
+    palette = MaterialPalette(
+        {
+            "roof_stair": stair_state,
+            "eaves": eave_state,
+            "edge_liner": liner_state,
+        }
+    )
+    eaves_profile = EaveProfile(
+        side_overhang=side_overhang,
+        gable_end_treatment="hard_gable",
+        gable_end_projection=0,
+        thickness=thickness,
+        layer_roles=eave_roles,
+        surface_connection="edge_liner",
+        surface_connection_role="edge_liner",
+    )
+    parts = generate(
+        width,
+        depth,
+        6,
+        RoofProfile(ridge_height=ridge_height, section_points=section_points),
+        eaves_profile,
+        RidgeProfile(),
+        palette,
+    )
+    liner = BlockState.parse(liner_state)
+    eave = BlockState.parse(eave_state)
+    for x in (0, width // 2, width - 1):
+        for edge_z, inner_z in ((0, 1), (depth - 1, depth - 2)):
+            assert parts.eaves.block_at((x, 7, edge_z)) == liner
+            assert parts.surface.block_at((x, 7, edge_z)) == BlockState.parse("minecraft:air")
+            assert parts.combined.block_at((x, 6, edge_z)) == eave
+
+            edge_pos = (x, 7, edge_z)
+            roof_pos = (x, 7, inner_z)
+            roof = parts.surface.block_at(roof_pos)
+            assert roof != BlockState.parse("minecraft:air")
+            assert any(
+                _touching_area(edge_pos, edge_box, roof_pos, roof_box) > 0
+                for edge_box in _shape_boxes(liner)
+                for roof_box in _shape_boxes(roof)
+            ), "edge liner must physically meet the adjacent stair surface"
+
+            lower_eave_pos = (x, 6, edge_z)
+            assert any(
+                _touching_area(lower_eave_pos, eave_box, edge_pos, edge_box) > 0
+                for eave_box in _shape_boxes(eave)
+                for edge_box in _shape_boxes(liner)
+            ), "top-half eave slab must meet the edge liner without a half-block gap"
+
+
+def test_edge_liner_rejects_geometry_that_cannot_be_joined_explicitly() -> None:
+    generate = _builder("generate_roof_components")
+    base = dict(
+        side_overhang=1,
+        gable_end_treatment="hard_gable",
+        gable_end_projection=0,
+        thickness=1,
+        layer_roles=("eaves",),
+        surface_connection="edge_liner",
+        surface_connection_role="edge_liner",
+    )
+    with pytest.raises(ValueError, match="full block"):
+        generate(
+            8,
+            7,
+            4,
+            RoofProfile(ridge_height=3),
+            EaveProfile(**base),
+            RidgeProfile(),
+            MaterialPalette(
+                {
+                    "roof_stair": "minecraft:stone_brick_stairs",
+                    "eaves": "minecraft:stone_brick_slab[type=top,waterlogged=false]",
+                    "edge_liner": "minecraft:stone_brick_slab[type=top,waterlogged=false]",
+                }
+            ),
+        )
+
+
+def test_edge_liner_integrates_with_hall_without_replacing_facade_structure() -> None:
+    profile = EaveProfile(
+        side_overhang=1,
+        gable_end_treatment="hard_gable",
+        gable_end_projection=0,
+        thickness=1,
+        layer_roles=("eaves",),
+        surface_connection="edge_liner",
+        surface_connection_role="edge_liner",
+    )
+    palette = MaterialPalette(
+        {
+            "roof_stair": "minecraft:polished_deepslate_stairs",
+            "eaves": "minecraft:deepslate_tile_slab[type=top,waterlogged=false]",
+            "edge_liner": "minecraft:polished_deepslate",
+        }
+    )
+    hall = generate_hall(
+        HallParameters(
+            roof_profile=RoofProfile(ridge_height=3),
+            eave_profile=profile,
+            material_palette=palette,
+        )
+    )
+    legacy = generate_hall()
+
+    assert all(hall.block_at((x, 7, 6)) == BlockState.parse("minecraft:polished_deepslate") for x in range(16))
+    assert hall.block_at((0, 5, 0)) == legacy.block_at((0, 5, 0))
+    assert hall.block_at((8, 2, 6)) == legacy.block_at((8, 2, 6))
+
+
+def test_edge_liner_rejects_bottom_half_eaves_and_nonstair_first_course() -> None:
+    generate = _builder("generate_roof_components")
+    profile = EaveProfile(
+        side_overhang=1,
+        gable_end_treatment="hard_gable",
+        gable_end_projection=0,
+        thickness=1,
+        layer_roles=("eaves",),
+        surface_connection="edge_liner",
+        surface_connection_role="edge_liner",
+    )
+    liner_palette = MaterialPalette(
+        {
+            "roof_stair": "minecraft:stone_brick_stairs",
+            "eaves": "minecraft:stone_brick_slab[type=bottom,waterlogged=false]",
+            "edge_liner": "minecraft:stone_bricks",
+        }
+    )
+    with pytest.raises(ValueError, match="top slab or full block"):
+        generate(8, 7, 4, RoofProfile(ridge_height=3), profile, RidgeProfile(), liner_palette)
+
+    with pytest.raises(ValueError, match="first roof course to rise by one"):
+        generate(
+            8,
+            9,
+            4,
+            RoofProfile(ridge_height=1),
+            profile,
+            RidgeProfile(),
+            MaterialPalette(
+                {
+                    "roof_stair": "minecraft:stone_brick_stairs",
+                    "eaves": "minecraft:stone_brick_slab[type=top,waterlogged=false]",
+                    "edge_liner": "minecraft:stone_bricks",
+                }
+            ),
+        )
 
 
 def _canonical_hash(model) -> str:

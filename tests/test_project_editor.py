@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from jiangnan_agent.assembly.adapters import corridor_module, hall_module
 from jiangnan_agent.assembly.model import Assembly, Connection, ConnectionAnchor, Module
 from jiangnan_agent.assembly.transforms import mirror_module, rotate_module, translate_module
 from jiangnan_agent.assembly.validation import validate_assembly
+from jiangnan_agent.assets import module_from_asset
 from jiangnan_agent.core.scene import VoxelModel
+from jiangnan_agent.generators.facade_profiles import facade_profile_to_mapping
 from jiangnan_agent.generators.hall import CorridorParameters, HallParameters
+from jiangnan_agent.parameters import load_facade_preset
 from jiangnan_agent.io.project_editor import ProjectEditor
 from jiangnan_agent.io.project_json import JiangnanProject, load_project, save_project
 
@@ -145,6 +150,77 @@ def test_undo_rejects_unrecorded_live_model_mutation() -> None:
 
     assert project.revision_cursor == 1
     assert project.assembly.modules["corridor-1"].model.block_at((0, 0, 0)).block_id == "minecraft:gold_block"
+
+
+def test_profiled_project_edit_save_reload_undo_redo_preserves_openings_and_other_modules(tmp_path) -> None:
+    profile = load_facade_preset("jiangnan_whitewall_timber")
+    hall = module_from_asset("hall-main", "jiangnan.hall", {"facade_profile": facade_profile_to_mapping(profile)})
+    corridor = module_from_asset("corridor-kept", "jiangnan.corridor", {"length": 9})
+    project = JiangnanProject(name="Profiled hall", assembly=Assembly((hall, corridor)))
+    untouched = project.assembly.modules["corridor-kept"]
+    untouched_blocks = dict(untouched.model.blocks)
+    editor = ProjectEditor(project)
+
+    editor.regenerate_module("hall-main", {"bay_count": 5}, "Resize profiled hall")
+    resized = project.assembly.modules["hall-main"]
+    assert resized.parameters["facade_profile"]["profile_id"] == profile.profile_id
+    assert [item["opening_id"] for item in resized.parameters["facade_profile"]["openings"]] == [
+        item.opening_id for item in profile.openings
+    ]
+    assert project.assembly.modules["corridor-kept"] is untouched
+    assert untouched.model.blocks == untouched_blocks
+
+    updated_profile = replace(
+        profile,
+        window=replace(profile.window, lattice_style="vertical"),
+        materials={**dict(profile.materials), "wall": "minecraft:white_terracotta"},
+    )
+    editor.regenerate_module(
+        "hall-main",
+        {"facade_profile": facade_profile_to_mapping(updated_profile)},
+        "Change wall finish and window lattice",
+    )
+    edited_blocks = dict(project.assembly.modules["hall-main"].model.blocks)
+    assert edited_blocks != dict(resized.model.blocks)
+    assert project.assembly.modules["hall-main"].metadata["parameter_config"]["facade_profile"]["window"][
+        "lattice_style"
+    ] == "vertical"
+
+    path = tmp_path / "profiled-hall.jap.json"
+    save_project(project, path)
+    reopened = load_project(path)
+    reopened_module = reopened.assembly.modules["hall-main"]
+    assert reopened_module.model.blocks == edited_blocks
+    assert reopened_module.parameters["facade_profile"]["profile_id"] == profile.profile_id
+    assert reopened.assembly.modules["corridor-kept"].model.blocks == untouched_blocks
+
+    history = ProjectEditor(reopened)
+    assert history.undo() is True
+    assert reopened.assembly.modules["hall-main"].model.blocks == dict(resized.model.blocks)
+    save_project(reopened, path)
+    reopened_again = load_project(path)
+    redo = ProjectEditor(reopened_again)
+    assert redo.redo() is True
+    assert reopened_again.assembly.modules["hall-main"].model.blocks == edited_blocks
+    assert reopened_again.assembly.modules["hall-main"].parameters["facade_profile"]["window"][
+        "lattice_style"
+    ] == "vertical"
+
+
+def test_legacy_v4_project_without_facade_profile_keeps_hash_after_edit(tmp_path) -> None:
+    from test_roof_eaves_v2 import _canonical_hash
+
+    hall = module_from_asset("hall-old", "jiangnan.hall", asset_version=4)
+    project = JiangnanProject(name="Legacy façade-free hall", assembly=Assembly((hall,)))
+    path = tmp_path / "legacy-hall.jap.json"
+    save_project(project, path)
+    reopened = load_project(path)
+    assert "facade_profile" not in reopened.assembly.modules["hall-old"].parameters
+
+    ProjectEditor(reopened).regenerate_module("hall-old", {"bay_count": 3}, "Keep the old hall")
+    edited = reopened.assembly.modules["hall-old"]
+    baseline = module_from_asset("hall-old-baseline", "jiangnan.hall", asset_version=4)
+    assert _canonical_hash(edited.model) == _canonical_hash(baseline.model)
 
 
 def test_add_module_records_block_delta_and_supports_undo_redo() -> None:

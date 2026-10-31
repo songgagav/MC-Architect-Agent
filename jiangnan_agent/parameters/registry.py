@@ -14,6 +14,12 @@ from typing import Any
 from ..assets.registry import get_asset
 from ..core.block import BlockState
 from ..generators.hall import CorridorParameters, HallParameters
+from ..generators.facade_profiles import (
+    FacadeProfile,
+    decode_facade_profile,
+    facade_profile_from_mapping,
+    facade_profile_to_mapping,
+)
 from ..generators.minecraft_materials import roof_material_shape, validate_roof_material_state
 from ..generators.roof_profiles import (
     EaveProfile,
@@ -42,6 +48,7 @@ class ProvenanceCategory(StrEnum):
 
 
 _ROOF_PRESET_FILE = Path(__file__).parent / "v3" / "roof_profiles.json"
+_PARAMETER_ROOT = Path(__file__).parent
 
 
 def list_roof_presets() -> tuple[str, ...]:
@@ -83,6 +90,62 @@ def load_roof_preset(preset_id: str) -> RoofPreset:
         )
     except KeyError as exc:
         raise ValueError(f"roof preset {preset_id!r} is missing {exc.args[0]!r}") from exc
+
+
+def list_facade_presets() -> tuple[str, ...]:
+    """Return stable IDs for versioned Minecraft façade creative presets."""
+
+    profiles = _facade_profile_records()
+    return tuple(sorted({profile_id for profile_id, _version in profiles}))
+
+
+def load_facade_preset(profile_id: str, version: int | None = None) -> FacadeProfile:
+    """Load a typed Minecraft creative façade preset from its versioned registry."""
+
+    if not isinstance(profile_id, str) or not profile_id:
+        raise ValueError("profile_id must be a non-empty string")
+    if version is not None and (isinstance(version, bool) or not isinstance(version, int) or version < 1):
+        raise ValueError("façade preset version must be a positive integer")
+    records = _facade_profile_records()
+    matches = [
+        profile
+        for (preset_id, preset_version), profile in records.items()
+        if preset_id == profile_id and (version is None or version == preset_version)
+    ]
+    if not matches:
+        suffix = "" if version is None else f" at version {version}"
+        raise ValueError(f"unknown façade preset{suffix}: {profile_id!r}")
+    return max(matches, key=lambda profile: profile.version)
+
+
+def _facade_profile_records() -> dict[tuple[str, int], FacadeProfile]:
+    records: dict[tuple[str, int], FacadeProfile] = {}
+    for path in sorted(_PARAMETER_ROOT.glob("v*/facade_profiles.json")):
+        try:
+            registry_version = int(path.parent.name.removeprefix("v"))
+        except ValueError:
+            continue
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if (
+            registry_version < 1
+            or data.get("version") != registry_version
+            or data.get("minecraft_version") != "1.21.5"
+            or data.get("historical_claims") is not False
+        ):
+            raise ValueError(f"façade preset registry version or creative-use declaration is invalid: {path}")
+        presets = data.get("presets")
+        if not isinstance(presets, list):
+            raise ValueError(f"façade preset registry must contain a presets array: {path}")
+        for raw in presets:
+            profile = facade_profile_from_mapping(raw)
+            key = (profile.profile_id, profile.version)
+            existing = records.get(key)
+            if existing is not None and existing != profile:
+                raise ValueError(f"conflicting façade preset definition {profile.profile_id!r}@{profile.version}")
+            records[key] = profile
+    if not records:
+        raise ValueError("no versioned façade presets are available")
+    return records
 
 
 def _freeze(value: object) -> object:
@@ -328,6 +391,20 @@ def _provided_top_level_parameters(schema: ParameterSchema, values: Mapping[str,
             continue
         result.add(_top_level_parameter(schema, name))
     return result
+
+
+def _provided_material_roles(values: Mapping[str, object] | None) -> set[str]:
+    if values is None:
+        return set()
+    roles: set[str] = set()
+    for name, value in values.items():
+        if name == "materials" and isinstance(value, Mapping):
+            roles.update(key for key in value if isinstance(key, str) and key not in {"roof", "eaves"})
+        elif isinstance(name, str) and name.startswith("materials."):
+            role = name.split(".", 1)[1]
+            if role not in {"roof", "eaves"}:
+                roles.add(role)
+    return roles
 
 
 def _provenance_record(
@@ -577,6 +654,17 @@ def _apply_values(
             "ridge_profile",
             "material_palette",
         }
+        if input_key not in aliases and canonical_path == "facade_profile":
+            if value is None:
+                normalized_value = None
+            elif isinstance(value, FacadeProfile):
+                normalized_value = facade_profile_to_mapping(value)
+            elif isinstance(value, str):
+                normalized_value = facade_profile_to_mapping(decode_facade_profile(value))
+            else:
+                normalized_value = facade_profile_to_mapping(facade_profile_from_mapping(value))
+            _record_and_write(target, canonical_path, normalized_value, input_key, conflicts)
+            continue
         if input_key not in aliases and canonical_path in nested_fields:
             nested = _validate_nested(schema, canonical_path, value)
             for nested_key, nested_value in nested.items():
@@ -678,7 +766,13 @@ def _derived_values(schema: ParameterSchema, config: Mapping[str, object]) -> di
     raise ValueError(f"no deterministic derived-parameter rules for {schema.kind!r}")
 
 
-def _resolve_generator_parameters(schema: ParameterSchema, config: Mapping[str, object]):
+def _resolve_generator_parameters(
+    schema: ParameterSchema,
+    config: Mapping[str, object],
+    *,
+    explicit_input_fields: set[str] | None = None,
+    explicit_material_roles: set[str] | None = None,
+):
     if config.get("building_type") != schema.kind:
         raise ParameterConflictError(
             f"building_type {config.get('building_type')!r} conflicts with asset kind {schema.kind!r}"
@@ -695,6 +789,27 @@ def _resolve_generator_parameters(schema: ParameterSchema, config: Mapping[str, 
         parameter_name: _read_path(config, input_path)
         for input_path, parameter_name in schema.generator_fields.items()
     }
+    if schema.version >= 4:
+        facade_value = generator_values.get("facade_profile")
+        if facade_value is not None:
+            if not isinstance(facade_value, Mapping):
+                raise ValueError("facade_profile must resolve to a JSON object")
+            generator_values["facade_profile"] = facade_profile_from_mapping(facade_value)
+            explicit_input_fields = explicit_input_fields or set()
+            if "door_width" not in explicit_input_fields:
+                generator_values.pop("door_width", None)
+            if "materials" not in explicit_input_fields:
+                generator_values["materials"] = None
+            else:
+                raw_materials = generator_values.get("materials")
+                explicit_material_roles = explicit_material_roles or set()
+                if not isinstance(raw_materials, Mapping):
+                    raise ValueError("materials must resolve to a role object")
+                generator_values["materials"] = {
+                    role: raw_materials[role]
+                    for role in explicit_material_roles
+                    if role in raw_materials
+                }
     if schema.version >= 3:
         generator_values["roof_profile"] = _roof_profile_from_mapping(generator_values["roof_profile"])
         generator_values["eave_profile"] = _eave_profile_from_mapping(generator_values["eave_profile"])
@@ -777,7 +892,22 @@ def resolve_parameters(
     explicit_conflicts: dict[str, tuple[object, str]] = {}
     derived_assertions: dict[str, object] = {}
     _apply_values(schema, config, values or {}, conflicts=explicit_conflicts, derived_assertions=derived_assertions)
-    generator_parameters, adapter_options = _resolve_generator_parameters(schema, config)
+    explicit_input_fields = _provided_top_level_parameters(schema, values)
+    explicit_material_roles = _provided_material_roles(values)
+    if base_provenance is not None:
+        for name, record in base_provenance.items():
+            if isinstance(name, str) and isinstance(record, Mapping) and record.get("category") == "user_input":
+                explicit_input_fields.add(_top_level_parameter(schema, name))
+                if name.startswith("materials."):
+                    explicit_material_roles.add(name.split(".", 1)[1])
+                elif name == "materials":
+                    explicit_material_roles.update(_provided_material_roles(base_config))
+    generator_parameters, adapter_options = _resolve_generator_parameters(
+        schema,
+        config,
+        explicit_input_fields=explicit_input_fields,
+        explicit_material_roles=explicit_material_roles,
+    )
     derived = _derived_values(schema, config)
     for key, requested in derived_assertions.items():
         if key not in derived:

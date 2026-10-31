@@ -31,7 +31,19 @@ def test_library_cli_initializes_and_lists_regions(tmp_path, monkeypatch, capsys
     )
     assert main() == 0
     sources = json.loads(capsys.readouterr().out)
-    assert sources and all(source["registry_version"] == 4 for source in sources)
+    assert sources and all(source["registry_version"] == 5 for source in sources)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["jiangnan", "library", "list", "styles", "--database", str(database)],
+    )
+    assert main() == 0
+    styles = json.loads(capsys.readouterr().out)
+    assert {style["profile_id"] for style in styles} >= {
+        "jiangnan_whitewall_timber",
+        "huizhou_graybrick_entry",
+        "garden_open_gallery",
+    }
 
 
 def test_library_cli_lists_current_module_asset_versions(tmp_path, monkeypatch, capsys) -> None:
@@ -53,7 +65,7 @@ def test_library_cli_lists_current_module_asset_versions(tmp_path, monkeypatch, 
     for asset_id in ("jiangnan.hall", "jiangnan.corridor"):
         current = [module for module in modules if module["asset_id"] == asset_id]
         assert len(current) == 1
-        assert current[0]["asset_version"] == 4
+        assert current[0]["asset_version"] == 5
 
 
 def test_library_backup_does_not_create_a_database_as_a_side_effect(tmp_path, monkeypatch, capsys) -> None:

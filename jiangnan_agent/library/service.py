@@ -12,6 +12,7 @@ from typing import Any
 
 from ..assets.registry import AssetSpec, list_assets
 from ..knowledge import KnowledgeBase, load_knowledge_base
+from ..parameters import load_facade_preset
 from .database import LibraryDatabase
 from .errors import AssetIntegrityError, LibraryLookupError, LitematicFormatError
 from .litematic import PARSER_VERSION, TARGET_MINECRAFT_DATA_VERSION, analyze_litematic, read_litematic
@@ -158,7 +159,7 @@ class LibraryService:
             raise ValueError(f"module catalog has no modules array: {module_catalog_path}")
         asset_catalog_path = _latest_versioned_json(_PACKAGE_ROOT / "jiangnan_agent" / "assets", "assets.json", "asset registry")
         asset_module_records = [_module_record_from_asset(asset, asset_catalog_path) for asset in list_assets()]
-        style_files = sorted((Path(__file__).parent / "styles" / "v1").glob("*.json"))
+        style_files = sorted((Path(__file__).parent / "styles").glob("v*/*.json"))
         parameter_files = sorted((Path(__file__).parent / "parameters").glob("v*/*.json"))
         style_records = [_read_json(path) | {"_definition_path": _relative_record_path(path)} for path in style_files]
         parameter_records = [(_read_json(path), path) for path in parameter_files]
@@ -540,6 +541,18 @@ class LibraryService:
                 (schema_id, schema_version),
             ).fetchone() is None:
                 raise ValueError(f"style profile {profile_id!r} references missing parameter schema {schema_id}@{schema_version}")
+        facade_profile_id = item.get("facade_profile_id")
+        facade_profile_version = item.get("facade_profile_version")
+        if facade_profile_id is not None or facade_profile_version is not None:
+            if not isinstance(facade_profile_id, str) or not facade_profile_id:
+                raise ValueError(f"style profile {profile_id!r} must identify its façade profile")
+            expected_version = _positive_int(facade_profile_version, "style façade profile version")
+            facade_profile = load_facade_preset(facade_profile_id, expected_version)
+            if facade_profile.version != expected_version:
+                raise ValueError(
+                    f"style profile {profile_id!r} references unsupported façade profile "
+                    f"{facade_profile_id}@{expected_version}"
+                )
         definition_path = _nonempty(item.get("_definition_path"), "style definition path")
         profile_json = _json({key: value for key, value in item.items() if key != "_definition_path"})
         existing = connection.execute(

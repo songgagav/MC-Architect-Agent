@@ -7,7 +7,9 @@ from .registry import (
     ProvenanceCategory,
     ResolvedParameters,
     list_roof_presets,
+    list_facade_presets,
     load_parameter_schema,
+    load_facade_preset,
     load_roof_preset,
     resolve_parameters,
 )
@@ -19,7 +21,9 @@ __all__ = [
     "ProvenanceCategory",
     "ResolvedParameters",
     "list_roof_presets",
+    "list_facade_presets",
     "load_parameter_schema",
+    "load_facade_preset",
     "load_roof_preset",
     "resolve_parameters",
 ]

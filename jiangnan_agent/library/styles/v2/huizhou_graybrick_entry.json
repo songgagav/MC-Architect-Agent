@@ -1,0 +1,32 @@
+{
+  "profile_id": "huizhou_graybrick_entry",
+  "version": 1,
+  "knowledge_base_version": 5,
+  "label": "徽州灰砖门面创作预设",
+  "design_target_region_id": "huizhou_core",
+  "region_association_kind": "creative_target",
+  "classification": "minecraft_visual_style",
+  "parameter_schema": {
+    "schema_id": "hall",
+    "version": 4
+  },
+  "status": "ready",
+  "grid_scale_meters_per_block": 1.0,
+  "facade_profile_id": "huizhou_graybrick_entry",
+  "facade_profile_version": 1,
+  "reference_asset_ids": [],
+  "reference_asset_versions": {},
+  "visual_preferences": {
+    "wall_and_timber": {
+      "value": "浅灰墙面、深色门框和灰砖装饰的 Minecraft 创作配置。",
+      "status": "minecraft_creative_config"
+    }
+  },
+  "provenance": {
+    "source_ids": [
+      "generator.facade.v1"
+    ],
+    "note": "Minecraft visual design preset only; no historical attribution or measured proportions are asserted."
+  },
+  "notes": "Minecraft 创作预设；不引用 DB-2 未核验候选构件，不宣称历史标准。"
+}

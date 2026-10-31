@@ -13,6 +13,7 @@ from ..core.block import BlockState
 _PERMILLE_MAX = 1000
 _SURFACE_FORMS = frozenset({"stair", "slab", "full_block"})
 _GABLE_END_TREATMENTS = frozenset({"hard_gable", "overhanging_gable"})
+_SURFACE_CONNECTIONS = frozenset({"legacy", "edge_liner"})
 
 
 def _integer(value: object, name: str, *, minimum: int) -> int:
@@ -121,6 +122,8 @@ class EaveProfile:
     layer_roles: tuple[str, ...] = ("eaves",)
     decoration_role: str | None = None
     decoration_spacing: int = 0
+    surface_connection: str = "legacy"
+    surface_connection_role: str | None = None
 
     def __post_init__(self) -> None:
         side_overhang = _integer(self.side_overhang, "side_overhang", minimum=0)
@@ -146,6 +149,18 @@ class EaveProfile:
                 raise ValueError("decoration_spacing must be positive when decoration_role is set")
         elif spacing != 0:
             raise ValueError("decoration_spacing must be zero when decoration_role is not set")
+        surface_connection = str(self.surface_connection)
+        if surface_connection not in _SURFACE_CONNECTIONS:
+            raise ValueError("surface_connection must be legacy or edge_liner")
+        surface_connection_role = self.surface_connection_role
+        if surface_connection == "edge_liner":
+            surface_connection_role = _role(surface_connection_role, "surface_connection_role")
+            if thickness < 1:
+                raise ValueError("edge_liner requires at least one eave layer")
+            if decoration_role is not None:
+                raise ValueError("edge_liner cannot be combined with eave decoration")
+        elif surface_connection_role is not None:
+            raise ValueError("surface_connection_role is only valid with edge_liner")
         object.__setattr__(self, "side_overhang", side_overhang)
         object.__setattr__(self, "gable_end_treatment", treatment)
         object.__setattr__(self, "gable_end_projection", projection)
@@ -153,6 +168,8 @@ class EaveProfile:
         object.__setattr__(self, "layer_roles", layer_roles)
         object.__setattr__(self, "decoration_role", decoration_role)
         object.__setattr__(self, "decoration_spacing", spacing)
+        object.__setattr__(self, "surface_connection", surface_connection)
+        object.__setattr__(self, "surface_connection_role", surface_connection_role)
 
 
 @dataclass(frozen=True)
@@ -231,6 +248,8 @@ class RoofPreset:
             raise ValueError("roof preset requires typed roof, eave, ridge, and material profiles")
         required_roles = {band.material_role for band in self.roof_profile.surface_bands}
         required_roles.update(self.eave_profile.layer_roles)
+        if self.eave_profile.surface_connection_role is not None:
+            required_roles.add(self.eave_profile.surface_connection_role)
         if self.eave_profile.decoration_role is not None:
             required_roles.add(self.eave_profile.decoration_role)
         if self.ridge_profile.cap_height > 0:
@@ -284,6 +303,8 @@ def eave_profile_from_mapping(value: object) -> EaveProfile:
             "layer_roles",
             "decoration_role",
             "decoration_spacing",
+            "surface_connection",
+            "surface_connection_role",
         },
     )
     try:
