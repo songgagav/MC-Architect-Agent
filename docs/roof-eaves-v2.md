@@ -20,6 +20,19 @@ minecraft:stone_brick_slab[type=bottom,waterlogged=false]
 
 楼梯和半砖朝向经由现有 BlockState 变换处理；遇到不支持的方向状态时明确报错，不会静默损坏。当前只支持对称双坡屋顶与硬山、悬挑山墙端处理。歇山、攒尖和复杂组合屋顶不在本版本范围内。
 
+### 屋面—檐口显式衔接（GEN-3.1）
+
+`eave_profile.surface_connection` 默认值为 `legacy`，以保持旧工程的方块结果不变。需要封闭已确认的檐口外缘断带时，可在工程实例中选择 `edge_liner` 并提供 `surface_connection_role`：
+
+```json
+{
+  "surface_connection": "edge_liner",
+  "surface_connection_role": "edge_liner"
+}
+```
+
+该模式只在正面与背面檐口边缘的明确一行中放置指定的完整方块；屋面边缘使用上半砖与该方块接触。校验会拒绝缺失或非完整方块材料、底半砖边缘、非楼梯首道屋面、首段高度不是 1、檐口装饰占用衬层位置等冲突。它不会填充山墙内部，不会任意覆盖墙柱，也不会自动改变版本化屋顶预设。旧配置省略此字段时仍走 `legacy` 路径。
+
 ## Minecraft 创作预设
 
 版本化定义存放在 `jiangnan_agent/parameters/v3/roof_profiles.json`，Python API 位于 `jiangnan_agent.parameters`。

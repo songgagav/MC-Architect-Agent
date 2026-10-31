@@ -214,6 +214,42 @@ def test_v3_schema_contains_profiles_provenance_and_parameter_groups() -> None:
     assert corridor.defaults["roof_profile"]["ridge_height"] == 1
 
 
+def test_v4_accepts_versioned_edge_liner_profile_and_keeps_legacy_default() -> None:
+    schema = load_parameter_schema("jiangnan.hall")
+    assert schema.defaults["eave_profile"]["surface_connection"] == "legacy"
+    assert schema.defaults["eave_profile"]["surface_connection_role"] is None
+
+    resolved = resolve_parameters(
+        "jiangnan.hall",
+        {
+            "eave_profile": {
+                "side_overhang": 1,
+                "gable_end_treatment": "hard_gable",
+                "gable_end_projection": 0,
+                "thickness": 1,
+                "layer_roles": ["eaves"],
+                "surface_connection": "edge_liner",
+                "surface_connection_role": "edge_liner",
+            },
+            "material_palette": {
+                "roof_stair": "minecraft:stone_brick_stairs",
+                "eaves": "minecraft:stone_brick_slab[type=top,waterlogged=false]",
+                "edge_liner": "minecraft:stone_bricks",
+            },
+        },
+    )
+
+    assert resolved.generator_parameters.eave_profile == EaveProfile(
+        side_overhang=1,
+        gable_end_treatment="hard_gable",
+        gable_end_projection=0,
+        thickness=1,
+        layer_roles=("eaves",),
+        surface_connection="edge_liner",
+        surface_connection_role="edge_liner",
+    )
+
+
 def test_corridor_v3_derives_bounds_from_its_length_width_and_eave_projections() -> None:
     resolved = resolve_parameters(
         "jiangnan.corridor",

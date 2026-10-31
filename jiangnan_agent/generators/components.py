@@ -380,13 +380,30 @@ def _validate_roof_profiles(
     for band in roof_profile.surface_bands:
         if band.material_role not in palette.roles:
             raise ValueError(f"missing material palette role {band.material_role!r}")
+    half_run = (depth - 1) // 2
+    section = sample_roof_section(half_run, roof_profile.ridge_height, roof_profile.section_points)
     for role in eave_profile.layer_roles:
         if role not in palette.roles:
             raise ValueError(f"missing material palette role {role!r}")
+    if eave_profile.surface_connection == "edge_liner":
+        role = eave_profile.surface_connection_role
+        if role not in palette.roles:
+            raise ValueError(f"missing material palette role {role!r}")
+        if roof_material_shape(_material(palette.roles[role])) != "full":
+            raise ValueError("edge_liner material must be a full block")
+        first_eave_state = _material(palette.roles[eave_profile.layer_roles[0]])
+        first_eave_shape = roof_material_shape(first_eave_state)
+        if first_eave_shape == "slab" and dict(first_eave_state.properties).get("type") != "top":
+            raise ValueError("edge_liner requires the top eave layer to be a top slab or full block")
+        if first_eave_shape not in {"slab", "full"}:
+            raise ValueError("edge_liner requires the top eave layer to be a top slab or full block")
+        if section[1] != 1:
+            raise ValueError("edge_liner requires the first roof course to rise by one block")
+        first_course_band = _roof_band(roof_profile, 1, half_run)
+        if first_course_band.form != "stair":
+            raise ValueError("edge_liner requires a stair-shaped first roof course")
     if eave_profile.decoration_role is not None and eave_profile.decoration_role not in palette.roles:
         raise ValueError(f"missing material palette role {eave_profile.decoration_role!r}")
-    half_run = (depth - 1) // 2
-    section = sample_roof_section(half_run, roof_profile.ridge_height, roof_profile.section_points)
     return base_y, section
 
 
@@ -515,6 +532,13 @@ def generate_eaves_component(
                 model.set_block(position, state)
                 if layer == 0:
                     owned.add(position)
+    if eave_profile.surface_connection == "edge_liner":
+        liner = _material(palette.roles[eave_profile.surface_connection_role])
+        for z in edge_zs:
+            for x in range(start_x, end_x):
+                position = (x, base_y + 1, z)
+                model.set_block(position, liner)
+                owned.add(position)
     if eave_profile.decoration_role is not None:
         decoration = _material(palette.roles[eave_profile.decoration_role])
         y = base_y + 1

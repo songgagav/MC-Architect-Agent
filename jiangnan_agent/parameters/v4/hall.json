@@ -55,7 +55,9 @@
         "eaves"
       ],
       "decoration_role": null,
-      "decoration_spacing": 0
+      "decoration_spacing": 0,
+      "surface_connection": "legacy",
+      "surface_connection_role": null
     },
     "ridge_profile": {
       "cap_width": 0,
